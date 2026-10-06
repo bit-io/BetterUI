@@ -1,0 +1,9 @@
+[package]
+-> name        => counter
+-> version     => 0.1.0
+-> using       => 0.5
+-> description => Przyklad BetterUI: counte
+-> lang        => HackerScript
+
+[dependencies]
+-> BetterUI => newest
