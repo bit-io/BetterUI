@@ -1,0 +1,95 @@
+fun argb(a: Int, r: Int, g: Int, b: Int) -> Int [
+    end a * 16777216 + r * 65536 + g * 256 + b
+]
+
+fun rgb(r: Int, g: Int, b: Int) -> Int [
+    end 4278190080 + r * 65536 + g * 256 + b
+]
+
+fun color_alpha(c: Int) -> Int [
+    end c / 16777216
+]
+
+fun color_red(c: Int) -> Int [
+    end (c / 65536) % 256
+]
+
+fun color_green(c: Int) -> Int [
+    end (c / 256) % 256
+]
+
+fun color_blue(c: Int) -> Int [
+    end c % 256
+]
+
+!! Zamienia alfe koloru na `a` (0..255).
+fun color_with_alpha(c: Int, a: Int) -> Int [
+    end argb(a, color_red(c), color_green(c), color_blue(c))
+]
+
+!! Mnozy alfe koloru przez `k` (0.0..1.0).
+fun color_scale_alpha(c: Int, k: Float) -> Int [
+    let a = (color_alpha(c) as Float) * k
+    end color_with_alpha(c, a as Int)
+]
+
+!! Liniowa interpolacja kolorow, t w 0.0..1.0.
+fun color_lerp(c1: Int, c2: Int, t: Float) -> Int [
+    let a = (color_alpha(c1) as Float) + ((color_alpha(c2) - color_alpha(c1)) as Float) * t
+    let r = (color_red(c1) as Float) + ((color_red(c2) - color_red(c1)) as Float) * t
+    let g = (color_green(c1) as Float) + ((color_green(c2) - color_green(c1)) as Float) * t
+    let b = (color_blue(c1) as Float) + ((color_blue(c2) - color_blue(c1)) as Float) * t
+    end argb(a as Int, r as Int, g as Int, b as Int)
+]
+
+!! Kody polecen (Cmd.op)
+const OP_FILL_RRECT: Int = 1
+const OP_STROKE_RRECT: Int = 2
+const OP_TEXT: Int = 3
+const OP_CLIP_RRECT: Int = 4
+const OP_RESTORE: Int = 5
+const OP_LINE: Int = 6
+const OP_CIRCLE: Int = 7
+const OP_STROKE_CIRCLE: Int = 8
+const OP_SHADOW: Int = 9
+
+!! Jedno polecenie rysowania. Pola uzywane zaleznie od `op`:
+!!  FILL_RRECT/STROKE_RRECT/CLIP/SHADOW: x y w h, r (promien rogow), sw (grubosc/rozmycie), color
+!!  TEXT: x y (lewy-gorny rog), size, color, text, bold (1/0)
+!!  LINE: x y -> x2 y2, sw, color
+!!  CIRCLE/STROKE_CIRCLE: x y = srodek, r, sw, color
+struct Cmd [
+    op: Int,
+    x: Float,
+    y: Float,
+    w: Float,
+    h: Float,
+    r: Float,
+    sw: Float,
+    color: Int,
+    text: Str,
+    bold: Int
+]
+
+fun cmd_new(op: Int) -> Cmd [
+    end Cmd(op, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, "", 0)
+]
+
+!! Stan wejscia z jednej klatki (wypelniany przez backend okna).
+struct Input [
+    mx: Float,
+    my: Float,
+    down: Bool,
+    pressed: Bool,
+    released: Bool,
+    scroll_y: Float,
+    shift: Bool,
+    ctrl: Bool,
+    chars: List<Str>,
+    keys: List<Str>,
+    close: Bool
+]
+
+fun input_new() -> Input [
+    end Input(-1.0, -1.0, false, false, false, 0.0, false, false, [], [], false)
+]
