@@ -1,0 +1,86 @@
+include <paint>
+
+fun window_open(title: Str, w: Int, h: Int) -> NativeGfx [
+    end native_open(title, w, h, false)
+]
+
+!! Tryb bez okna (testy, zrzuty ekranu do PNG).
+fun headless_open(w: Int, h: Int) -> NativeGfx [
+    end native_open("headless", w, h, true)
+]
+
+fun ui_set_dark(ui: Ui, dark: Bool) [
+    if dark [
+        ui.theme = theme_dark()
+    ] else [
+        ui.theme = theme_light()
+    ]
+]
+
+!! Poczatek klatki z gotowym wejsciem (uzywane przez testy i przez frame_begin).
+fun frame_begin_with(ui: Ui, inp: Input) [
+    let now = now_ms()
+    let dt = 0.016
+    if ui.last_ms > 0 [
+        dt = fclamp(((now - ui.last_ms) as Float) / 1000.0, 0.001, 0.1)
+    ]
+    ui.last_ms = now
+    ui.dt = dt
+    ui.time = ui.time + dt
+    ui.input = inp.clone()
+    ui.prev_nodes = ui.nodes.clone()
+    ui.nodes = []
+    ui.stack = []
+    ui.pending_key = 0
+    ui.animating = false
+    let pidx: Dict<Str, Int> = dict()
+    let pi = 0
+    while pi < ui.prev_nodes.len() [
+        pidx.insert(ui.prev_nodes[pi].id as Str, pi)
+        pi = pi + 1
+    ]
+    ui.prev_index = pidx
+    ui_compute_hot(ui)
+    if inp.pressed and ui.hot_id != ui.focus_id [
+        ui.focus_id = 0
+    ]
+    if inp.scroll_y != 0.0 and ui.scroll_id != 0 [
+        let key = "scr:" + (ui.scroll_id as Str)
+        let cur = dget_f(ui.floats, key.clone(), 0.0)
+        ui.floats.insert(key, cur - inp.scroll_y * 40.0)
+    ]
+    let rm = modifier().background(ui.theme.background)
+    ui_open(ui, K_COLUMN, rm)
+]
+
+!! Poczatek klatki: pobiera wejscie z okna. Zwraca false, gdy okno zamknieto.
+fun frame_begin(ui: Ui, gfx: NativeGfx) -> Bool [
+    let inp = native_poll(gfx)
+    if inp.close [
+        end false
+    ]
+    frame_begin_with(ui, inp)
+    end true
+]
+
+!! Koniec klatki: layout, display list, rysowanie (tylko gdy cos sie zmienilo) i prezentacja.
+fun frame_end(ui: Ui, gfx: NativeGfx) [
+    ui_close(ui, K_COLUMN)
+    lay_run(ui, gfx)
+    let cmds: List<Cmd> = []
+    if ui.nodes.len() > 0 [
+        paint_node(ui, gfx, 0, 1.0, cmds)
+    ]
+    let changed = ui.frame == 0 or cmds != ui.last_cmds
+    if changed [
+        native_render(gfx, cmds.clone())
+        native_present(gfx)
+    ] else [
+        native_pump(gfx)
+    ]
+    ui.last_cmds = cmds
+    if not ui.input.down [
+        ui.active_id = 0
+    ]
+    ui.frame = ui.frame + 1
+]
