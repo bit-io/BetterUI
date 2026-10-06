@@ -1,0 +1,395 @@
+include <ui>
+
+const INF: Float = 1000000.0
+
+!! Dzieli napis po separatorze (kopia str_split - biblioteka nie zalezy od std).
+fun bu_split(s: Str, sep: Str) -> List<Str> [
+    let out: List<Str> = []
+    let n = sep.len()
+    let m = s.len()
+    if n == 0 [
+        out.push(s)
+        end out
+    ]
+    let start = 0
+    let i = 0
+    while i + n <= m [
+        if s.slice(i, i + n) == sep [
+            out.push(s.slice(start, i))
+            i = i + n
+            start = i
+        ] else [
+            i = i + 1
+        ]
+    ]
+    out.push(s.slice(start, m))
+    end out
+]
+
+!! Zawija tekst do szerokosci `maxw` (po slowach). Zwraca linie.
+fun lay_wrap(gfx: NativeGfx, text: Str, size: Float, bold: Bool, maxw: Float) -> List<Str> [
+    let out: List<Str> = []
+    let paras = bu_split(text, "\n")
+    let pi = 0
+    while pi < paras.len() [
+        let para = paras[pi].clone()
+        if maxw >= INF [
+            out.push(para)
+        ] else [
+            let words = bu_split(para, " ")
+            let line = ""
+            let wi = 0
+            while wi < words.len() [
+                let wd = words[wi].clone()
+                let trial = wd.clone()
+                if line != "" [
+                    trial = line.clone() + " " + wd.clone()
+                ]
+                if line != "" and native_text_width(gfx, trial.clone(), size, bold) > maxw [
+                    out.push(line.clone())
+                    line = wd.clone()
+                ] else [
+                    line = trial
+                ]
+                wi = wi + 1
+            ]
+            out.push(line)
+        ]
+        pi = pi + 1
+    ]
+    if out.len() == 0 [
+        out.push("")
+    ]
+    end out
+]
+
+!! Mierzy wezel `i` przy ograniczeniach (maxw, maxh). Ustawia nodes[i].w/.h (rozmiar zewnetrzny).
+fun lay_measure(ui: Ui, gfx: NativeGfx, i: Int, maxw: Float, maxh: Float) [
+    let m = ui.nodes[i].m.clone()
+    let kind = ui.nodes[i].kind
+    let kids = ui.nodes[i].children.clone()
+    let padw = m.pl + m.pr
+    let padh = m.pt + m.pb
+
+    let ow = -1.0
+    if ui.nodes[i].force_w >= 0.0 [
+        ow = ui.nodes[i].force_w
+    ] elif m.fill_w >= 0.0 and maxw < INF [
+        ow = maxw * m.fill_w
+    ] elif m.wd >= 0.0 [
+        ow = m.wd
+    ]
+    let oh = -1.0
+    if ui.nodes[i].force_h >= 0.0 [
+        oh = ui.nodes[i].force_h
+    ] elif m.fill_h >= 0.0 and maxh < INF [
+        oh = maxh * m.fill_h
+    ] elif m.ht >= 0.0 [
+        oh = m.ht
+    ]
+
+    let cmaxw = maxw
+    if ow >= 0.0 [
+        cmaxw = ow
+    ]
+    cmaxw = fmax(0.0, cmaxw - padw)
+    if cmaxw > INF [
+        cmaxw = INF
+    ]
+    let cmaxh = maxh
+    if oh >= 0.0 [
+        cmaxh = oh
+    ]
+    cmaxh = fmax(0.0, cmaxh - padh)
+    if cmaxh > INF [
+        cmaxh = INF
+    ]
+
+    let cw = 0.0
+    let ch = 0.0
+    let n = kids.len()
+
+    if kind == K_TEXT [
+        let size = ui.nodes[i].size
+        let bold = ui.nodes[i].bold == 1
+        let lines = lay_wrap(gfx, ui.nodes[i].text.clone(), size, bold, cmaxw)
+        let lh = native_line_height(gfx, size, bold)
+        let k = 0
+        while k < lines.len() [
+            cw = fmax(cw, native_text_width(gfx, lines[k].clone(), size, bold))
+            k = k + 1
+        ]
+        ch = lh * (lines.len() as Float)
+        ui.nodes[i].lines = lines
+    ] elif kind == K_COLUMN [
+        let spacing = ui.nodes[i].spacing
+        let scroll = m.do_scroll == 1
+        let childmaxh = cmaxh
+        if scroll [
+            childmaxh = INF
+        ]
+        let used = 0.0
+        let wsum = 0.0
+        let k = 0
+        while k < n [
+            let c = kids[k]
+            let cwgt = ui.nodes[c].m.wgt
+            if cwgt > 0.0 and childmaxh < INF [
+                wsum = wsum + cwgt
+            ] else [
+                lay_measure(ui, gfx, c, cmaxw, fmax(0.0, childmaxh - used))
+                used = used + ui.nodes[c].h
+                cw = fmax(cw, ui.nodes[c].w)
+            ]
+            k = k + 1
+        ]
+        let gaps = 0.0
+        if n > 1 [
+            gaps = spacing * ((n - 1) as Float)
+        ]
+        if wsum > 0.0 [
+            let rem = fmax(0.0, childmaxh - used - gaps)
+            k = 0
+            while k < n [
+                let c = kids[k]
+                let cwgt = ui.nodes[c].m.wgt
+                if cwgt > 0.0 [
+                    let fhh = rem * cwgt / wsum
+                    ui.nodes[c].force_h = fhh
+                    lay_measure(ui, gfx, c, cmaxw, fhh)
+                    used = used + ui.nodes[c].h
+                    cw = fmax(cw, ui.nodes[c].w)
+                ]
+                k = k + 1
+            ]
+        ]
+        ch = used + gaps
+    ] elif kind == K_ROW [
+        let spacing = ui.nodes[i].spacing
+        let used = 0.0
+        let wsum = 0.0
+        let k = 0
+        while k < n [
+            let c = kids[k]
+            let cwgt = ui.nodes[c].m.wgt
+            if cwgt > 0.0 and cmaxw < INF [
+                wsum = wsum + cwgt
+            ] else [
+                lay_measure(ui, gfx, c, fmax(0.0, cmaxw - used), cmaxh)
+                used = used + ui.nodes[c].w
+                ch = fmax(ch, ui.nodes[c].h)
+            ]
+            k = k + 1
+        ]
+        let gaps = 0.0
+        if n > 1 [
+            gaps = spacing * ((n - 1) as Float)
+        ]
+        if wsum > 0.0 [
+            let rem = fmax(0.0, cmaxw - used - gaps)
+            k = 0
+            while k < n [
+                let c = kids[k]
+                let cwgt = ui.nodes[c].m.wgt
+                if cwgt > 0.0 [
+                    let fww = rem * cwgt / wsum
+                    ui.nodes[c].force_w = fww
+                    lay_measure(ui, gfx, c, fww, cmaxh)
+                    used = used + ui.nodes[c].w
+                    ch = fmax(ch, ui.nodes[c].h)
+                ]
+                k = k + 1
+            ]
+        ]
+        cw = used + gaps
+    ] elif kind == K_BOX [
+        let k = 0
+        while k < n [
+            let c = kids[k]
+            lay_measure(ui, gfx, c, cmaxw, cmaxh)
+            cw = fmax(cw, ui.nodes[c].w)
+            ch = fmax(ch, ui.nodes[c].h)
+            k = k + 1
+        ]
+    ]
+    !! K_SPACER: rozmiar wylacznie z modyfikatora
+
+    let fw = cw + padw
+    if ow >= 0.0 [
+        fw = ow
+    ]
+    fw = fmax(fw, m.min_w)
+    let fh = ch + padh
+    if oh >= 0.0 [
+        fh = oh
+    ]
+    fh = fmax(fh, m.min_h)
+    !! przewijany Column bez jawnej wysokosci: przycinamy do dostepnego miejsca
+    if kind == K_COLUMN and m.do_scroll == 1 and oh < 0.0 and maxh < INF [
+        fh = fmin(fh, maxh)
+    ]
+    ui.nodes[i].w = fw
+    ui.nodes[i].h = fh
+    ui.nodes[i].scroll_max = fmax(0.0, (ch + padh) - fh)
+]
+
+!! Ustawia pozycje (x, y) wezla `i` i jego dzieci.
+fun lay_place(ui: Ui, i: Int, x: Float, y: Float) [
+    let m = ui.nodes[i].m.clone()
+    let px = x + m.ox
+    let py = y + m.oy
+    ui.nodes[i].x = px
+    ui.nodes[i].y = py
+    let kind = ui.nodes[i].kind
+    let kids = ui.nodes[i].children.clone()
+    let n = kids.len()
+    let cx = px + m.pl
+    let cy = py + m.pt
+    let iw = ui.nodes[i].w - m.pl - m.pr
+    let ih = ui.nodes[i].h - m.pt - m.pb
+    let arr = ui.nodes[i].arr
+    let align = ui.nodes[i].align
+    let spacing = ui.nodes[i].spacing
+
+    if kind == K_COLUMN [
+        let used = 0.0
+        let k = 0
+        while k < n [
+            used = used + ui.nodes[kids[k]].h
+            k = k + 1
+        ]
+        if n > 1 [
+            used = used + spacing * ((n - 1) as Float)
+        ]
+        let start = 0.0
+        let gap = spacing
+        let free = ih - used
+        if m.do_scroll == 1 [
+            let key = "scr:" + (ui.nodes[i].id as Str)
+            let off = dget_f(ui.floats, key.clone(), 0.0)
+            off = fclamp(off, 0.0, ui.nodes[i].scroll_max)
+            ui.floats.insert(key, off)
+            start = -off
+        ] elif free > 0.0 [
+            if arr == ARR_CENTER [
+                start = free / 2.0
+            ] elif arr == ARR_END [
+                start = free
+            ] elif arr == ARR_SPACE_BETWEEN and n > 1 [
+                gap = spacing + free / ((n - 1) as Float)
+            ] elif arr == ARR_SPACE_AROUND [
+                let g = free / (n as Float)
+                gap = spacing + g
+                start = g / 2.0
+            ] elif arr == ARR_SPACE_EVENLY [
+                let g = free / ((n + 1) as Float)
+                gap = spacing + g
+                start = g
+            ]
+        ]
+        let cur = cy + start
+        k = 0
+        while k < n [
+            let c = kids[k]
+            let a = align
+            if ui.nodes[c].m.self_align >= 0 [
+                a = ui.nodes[c].m.self_align
+            ]
+            let ccx = cx
+            if a == ALIGN_CENTER [
+                ccx = cx + (iw - ui.nodes[c].w) / 2.0
+            ] elif a == ALIGN_END [
+                ccx = cx + iw - ui.nodes[c].w
+            ]
+            lay_place(ui, c, ccx, cur)
+            cur = cur + ui.nodes[c].h + gap
+            k = k + 1
+        ]
+    ] elif kind == K_ROW [
+        let used = 0.0
+        let k = 0
+        while k < n [
+            used = used + ui.nodes[kids[k]].w
+            k = k + 1
+        ]
+        if n > 1 [
+            used = used + spacing * ((n - 1) as Float)
+        ]
+        let start = 0.0
+        let gap = spacing
+        let free = iw - used
+        if free > 0.0 [
+            if arr == ARR_CENTER [
+                start = free / 2.0
+            ] elif arr == ARR_END [
+                start = free
+            ] elif arr == ARR_SPACE_BETWEEN and n > 1 [
+                gap = spacing + free / ((n - 1) as Float)
+            ] elif arr == ARR_SPACE_AROUND [
+                let g = free / (n as Float)
+                gap = spacing + g
+                start = g / 2.0
+            ] elif arr == ARR_SPACE_EVENLY [
+                let g = free / ((n + 1) as Float)
+                gap = spacing + g
+                start = g
+            ]
+        ]
+        let cur = cx + start
+        k = 0
+        while k < n [
+            let c = kids[k]
+            let a = align
+            if ui.nodes[c].m.self_align >= 0 [
+                a = ui.nodes[c].m.self_align
+            ]
+            let ccy = cy
+            if a == ALIGN_CENTER [
+                ccy = cy + (ih - ui.nodes[c].h) / 2.0
+            ] elif a == ALIGN_END [
+                ccy = cy + ih - ui.nodes[c].h
+            ]
+            lay_place(ui, c, cur, ccy)
+            cur = cur + ui.nodes[c].w + gap
+            k = k + 1
+        ]
+    ] elif kind == K_BOX [
+        let k = 0
+        while k < n [
+            let c = kids[k]
+            let a = align
+            if ui.nodes[c].m.self_align >= 0 [
+                a = ui.nodes[c].m.self_align
+            ]
+            let ax = a % 3
+            let ay = a / 3
+            let ccx = cx
+            if ax == 1 [
+                ccx = cx + (iw - ui.nodes[c].w) / 2.0
+            ] elif ax == 2 [
+                ccx = cx + iw - ui.nodes[c].w
+            ]
+            let ccy = cy
+            if ay == 1 [
+                ccy = cy + (ih - ui.nodes[c].h) / 2.0
+            ] elif ay == 2 [
+                ccy = cy + ih - ui.nodes[c].h
+            ]
+            lay_place(ui, c, ccx, ccy)
+            k = k + 1
+        ]
+    ]
+]
+
+!! Uklada cale drzewo (korzen = wezel 0) w oknie.
+fun lay_run(ui: Ui, gfx: NativeGfx) [
+    if ui.nodes.len() == 0 [
+        end
+    ]
+    let rw = ui.width
+    let rh = ui.height
+    ui.nodes[0].force_w = rw
+    ui.nodes[0].force_h = rh
+    lay_measure(ui, gfx, 0, rw, rh)
+    lay_place(ui, 0, 0.0, 0.0)
+]
