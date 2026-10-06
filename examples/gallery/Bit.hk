@@ -1,0 +1,9 @@
+[package]
+-> name        => gallery
+-> version     => 0.1.0
+-> using       => 0.5
+-> description => Przyklad BetterUI: gallery
+-> lang        => HackerScript
+
+[dependencies]
+-> BetterUI => newest
