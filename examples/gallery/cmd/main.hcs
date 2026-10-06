@@ -1,0 +1,107 @@
+using <0.5>
+get <bit:BetterUI>
+
+!! Galeria widgetow BetterUI - odpowiednik "Compose Material gallery".
+!! Uruchom: bit run   (potrzebny serwer X11; w testach: xvfb-run)
+
+fun Section(ui: Ui, title: Str) [
+    SpacerH(ui, 16.0)
+    Title(ui, title)
+    SpacerH(ui, 6.0)
+]
+
+fun App(ui: Ui) [
+    let count = remember_int(ui, 0)
+    let dark = remember_bool(ui, false)
+    let on = remember_bool(ui, true)
+    let chk = remember_bool(ui, false)
+    let vol = remember_float(ui, 0.35)
+    let opt = remember_int(ui, 0)
+    let name = remember_str(ui, "")
+
+    let is_dark = bool_get(ui, dark.clone())
+    ui_set_dark(ui, is_dark)
+    TopAppBar(ui, "BetterUI gallery")
+    ScrollColumn(ui, modifier().weight(1.0).fill_max_width().padding(16.0))
+
+    Row(ui, modifier().fill_max_width())
+    Text(ui, "Tryb ciemny")
+    SpacerW(ui, 12.0)
+    Switch(ui, dark.clone())
+    EndRow(ui)
+
+    Section(ui, "Przyciski i stan")
+    Card(ui, modifier().fill_max_width())
+    let c = int_get(ui, count.clone())
+    Text(ui, "Klikniecia: " + (c as Str))
+    SpacerH(ui, 8.0)
+    Row(ui, modifier())
+    if Button(ui, "Dodaj") [
+        int_set(ui, count.clone(), c + 1)
+    ]
+    SpacerW(ui, 8.0)
+    if TonalButton(ui, "Zeruj") [
+        int_set(ui, count.clone(), 0)
+    ]
+    SpacerW(ui, 8.0)
+    OutlinedButton(ui, "Outlined")
+    SpacerW(ui, 8.0)
+    TextButton(ui, "Text")
+    EndRow(ui)
+    EndCard(ui)
+
+    Section(ui, "Wybor")
+    Row(ui, modifier())
+    Switch(ui, on.clone())
+    SpacerW(ui, 16.0)
+    Checkbox(ui, chk.clone(), "Zgoda")
+    EndRow(ui)
+    SpacerH(ui, 8.0)
+    RadioButton(ui, opt.clone(), 0, "Opcja A")
+    RadioButton(ui, opt.clone(), 1, "Opcja B")
+    RadioButton(ui, opt.clone(), 2, "Opcja C")
+
+    Section(ui, "Suwak i postep")
+    Slider(ui, vol.clone(), 0.0, 1.0)
+    let vv = float_get(ui, vol.clone())
+    LinearProgress(ui, vv)
+
+    Section(ui, "Pole tekstowe")
+    TextField(ui, name.clone(), "Wpisz imie")
+    let nm = str_get(ui, name.clone())
+    if nm != "" [
+        SpacerH(ui, 8.0)
+        Text(ui, "Czesc, " + nm + "!")
+    ]
+
+    Section(ui, "Lista (przewijanie kolem myszy)")
+    let i = 0
+    while i < 12 [
+        Key(ui, i)
+        let sv = ui.theme.surface_variant
+        Surface(ui, modifier().fill_max_width().padding_xy(12.0, 10.0).corner(8.0), sv)
+        Text(ui, "Element listy nr " + (i as Str))
+        EndSurface(ui)
+        SpacerH(ui, 6.0)
+        i = i + 1
+    ]
+    EndColumn(ui)
+]
+
+fun main() [
+    let a = args()
+    let limit = 0
+    if a.len() > 0 [
+        limit = 90   !! dowolny argument = tryb testowy: zapisz PNG po 90 klatkach i wyjdz
+    ]
+    let gfx = window_open("BetterUI gallery", 480, 720)
+    let ui = ui_new(480.0, 720.0)
+    while frame_begin(ui, gfx) [
+        App(ui)
+        frame_end(ui, gfx)
+        if limit > 0 and ui.frame >= limit [
+            native_save_png(gfx, "/tmp/gallery.png")
+            break
+        ]
+    ]
+]
