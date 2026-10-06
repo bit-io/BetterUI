@@ -1,0 +1,605 @@
+get <crates:skia-safe::0.86>
+get <crates:minifb::0.29>
+get <crates:bytemuck::1>
+include <draw>
+
+!! Struktury o nazwie `Native*` nie dostaja derive (trzymaja obce typy).
+struct NativeGfx [
+    width: Int,
+    height: Int,
+    pixels: List<u32>,
+    fonts: Dict<Str, Font>,
+    typeface: Typeface,
+    bold_typeface: Typeface,
+    window: Option<Window>,
+    prev_down: Bool,
+    touch: Int
+]
+
+!! Otwiera backend. headless=true => bez okna (testy, zrzuty PNG).
+fun native_open(title: Str, w: Int, h: Int, headless: Bool) -> NativeGfx [
+    let mgr = FontMgr::new()
+    let tf = mgr.match_family_style(&("sans-serif"), FontStyle::normal()).unwrap()
+    let btf = mgr.match_family_style(&("sans-serif"), FontStyle::bold()).unwrap()
+    let px: List<u32> = []
+    px.resize((w * h) as usize, 0)
+    let fonts: Dict<Str, Font> = dict()
+    let win: Option<Window> = none()
+    if not headless [
+        let opts = WindowOptions::default()
+        opts.resize = false
+        let created = Window::new(&(title), w as usize, h as usize, opts).unwrap()
+        created.set_target_fps(60)
+        win = some(created)
+    ]
+    end NativeGfx(w, h, px, fonts, tf, btf, win, false, 0)
+]
+
+fun native_font_key(size: Float, bold: Bool) -> Str [
+    let key = "f" + (((size * 4.0) as Int) as Str)
+    if bold [
+        key = key + "b"
+    ]
+    end key
+]
+
+fun native_font(gfx: NativeGfx, size: Float, bold: Bool) -> Font [
+    let key = native_font_key(size, bold)
+    match gfx.fonts.fetch(key.clone()) [
+        Some(f) -> [
+            end f
+        ]
+        None -> [
+            let tf = gfx.typeface.clone()
+            if bold [
+                tf = gfx.bold_typeface.clone()
+            ]
+            let font = Font::from_typeface(tf, size as f32)
+            font.set_subpixel(true)
+            gfx.fonts.insert(key, font.clone())
+            end font
+        ]
+    ]
+]
+
+!! Szerokosc tekstu w pikselach.
+fun native_text_width(gfx: NativeGfx, text: Str, size: Float, bold: Bool) -> Float [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    let font = native_font(gfx, size, bold)
+    let m = font.measure_str(&(text), none())
+    let wv = m.0
+    end wv as Float
+]
+
+!! Wysokosc linii (ascent + descent + leading).
+fun native_line_height(gfx: NativeGfx, size: Float, bold: Bool) -> Float [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    let font = native_font(gfx, size, bold)
+    let m = font.metrics()
+    let hv = m.0
+    end hv as Float
+]
+
+fun native_rect(c: Cmd) -> Rect [
+    end Rect::from_xywh(c.x as f32, c.y as f32, c.w as f32, c.h as f32)
+]
+
+fun native_paint(color: Int) -> Paint [
+    let paint = Paint::default()
+    paint.set_anti_alias(true)
+    paint.set_color(Color::new(color as u32))
+    end paint
+]
+
+!! Rysuje liste polecen na wewnetrznym buforze pikseli (CPU raster Skii).
+fun native_render(gfx: NativeGfx, cmds: List<Cmd>) [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    !! Przed utworzeniem powierzchni (ktora pozycza gfx.pixels) wypelniamy cache fontow.
+    let pre = 0
+    while pre < cmds.len() [
+        if cmds[pre].op == OP_TEXT [
+            let warm = native_font(gfx, cmds[pre].h, cmds[pre].bold == 1)
+        ]
+        pre = pre + 1
+    ]
+    let info = ImageInfo::new_n32_premul(ISize::new(gfx.width as i32, gfx.height as i32), none())
+    let row = (gfx.width * 4) as usize
+    let surface = surfaces::wrap_pixels(&(info), bytemuck::cast_slice_mut(&mut (gfx.pixels)), some(row), none()).unwrap()
+    let canvas = surface.canvas()
+    canvas.clear(Color::new(4294967295))
+    let i = 0
+    while i < cmds.len() [
+        let c = cmds[i].clone()
+        let op = c.op
+        if op == OP_FILL_RRECT [
+            let paint = native_paint(c.color)
+            if c.r > 0.0 [
+                canvas.draw_round_rect(native_rect(c.clone()), c.r as f32, c.r as f32, &(paint))
+            ] else [
+                canvas.draw_rect(native_rect(c.clone()), &(paint))
+            ]
+        ]
+        if op == OP_STROKE_RRECT [
+            let paint = native_paint(c.color)
+            paint.set_style(PaintStyle::Stroke)
+            paint.set_stroke_width(c.sw as f32)
+            canvas.draw_round_rect(native_rect(c.clone()), c.r as f32, c.r as f32, &(paint))
+        ]
+        if op == OP_SHADOW [
+            let paint = native_paint(c.color)
+            paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, c.sw as f32, true).unwrap())
+            canvas.draw_round_rect(native_rect(c.clone()), c.r as f32, c.r as f32, &(paint))
+        ]
+        if op == OP_CLIP_RRECT [
+            canvas.save()
+            let rr = RRect::new_rect_xy(native_rect(c.clone()), c.r as f32, c.r as f32)
+            canvas.clip_rrect(&(rr), ClipOp::Intersect, true)
+        ]
+        if op == OP_RESTORE [
+            canvas.restore()
+        ]
+        if op == OP_LINE [
+            let paint = native_paint(c.color)
+            paint.set_style(PaintStyle::Stroke)
+            paint.set_stroke_width(c.sw as f32)
+            paint.set_stroke_cap(PaintCap::Round)
+            canvas.draw_line(Point::new(c.x as f32, c.y as f32), Point::new(c.w as f32, c.h as f32), &(paint))
+        ]
+        if op == OP_CIRCLE [
+            let paint = native_paint(c.color)
+            canvas.draw_circle(Point::new(c.x as f32, c.y as f32), c.r as f32, &(paint))
+        ]
+        if op == OP_STROKE_CIRCLE [
+            let paint = native_paint(c.color)
+            paint.set_style(PaintStyle::Stroke)
+            paint.set_stroke_width(c.sw as f32)
+            canvas.draw_circle(Point::new(c.x as f32, c.y as f32), c.r as f32, &(paint))
+        ]
+        if op == OP_TEXT [
+            let paint = native_paint(c.color)
+            let fkey = native_font_key(c.h, c.bold == 1)
+            match gfx.fonts.fetch(fkey) [
+                Some(font) -> [
+                    let fm = font.metrics()
+                    let fm1 = fm.1
+                    let ascent = fm1.ascent
+                    let base = c.y - (ascent as Float)
+                    canvas.draw_str(&(c.text), Point::new(c.x as f32, base as f32), &(font), &(paint))
+                ]
+                None -> [
+                ]
+            ]
+        ]
+        i = i + 1
+    ]
+]
+
+!! Wysyla bufor do okna (no-op w trybie headless).
+fun native_present(gfx: NativeGfx) [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    if gfx.window.is_some() [
+        gfx.window.as_mut().unwrap().update_with_buffer(&(gfx.pixels), gfx.width as usize, gfx.height as usize).unwrap()
+    ]
+]
+
+!! Pompuje zdarzenia okna bez rysowania (gdy nic sie nie zmienilo).
+fun native_pump(gfx: NativeGfx) [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    if gfx.window.is_some() [
+        gfx.window.as_mut().unwrap().update()
+    ]
+]
+
+!! Zapisuje aktualny bufor do PNG (do testow/zrzutow).
+fun native_save_png(gfx: NativeGfx, path: Str) -> Bool [
+    gfx.touch = gfx.touch !! wymusza &mut (kompilator nie propaguje mutacji przez wywolania)
+    let info = ImageInfo::new_n32_premul(ISize::new(gfx.width as i32, gfx.height as i32), none())
+    let row = (gfx.width * 4) as usize
+    let surface = surfaces::wrap_pixels(&(info), bytemuck::cast_slice_mut(&mut (gfx.pixels)), some(row), none()).unwrap()
+    let image = surface.image_snapshot()
+    let data = image.encode_to_data(EncodedImageFormat::PNG)
+    if data.is_none() [
+        end false
+    ]
+    std::fs::write(&(path), data.unwrap().as_bytes()).unwrap()
+    end true
+]
+
+!! Czyta wejscie z okna (mysz, scroll, klawiatura). W trybie headless zwraca puste.
+fun native_poll(gfx: NativeGfx) -> Input [
+    let inp = input_new()
+    if gfx.window.is_none() [
+        end inp
+    ]
+    let win = gfx.window.as_mut().unwrap()
+    inp.close = not win.is_open()
+    let mp = win.get_mouse_pos(MouseMode::Discard)
+    match mp [
+        Some(p) -> [
+            inp.mx = p.0 as Float
+            inp.my = p.1 as Float
+        ]
+        None -> [
+            inp.mx = -1.0
+        ]
+    ]
+    let down = win.get_mouse_down(MouseButton::Left)
+    inp.down = down
+    inp.pressed = down and not gfx.prev_down
+    inp.released = (not down) and gfx.prev_down
+    gfx.prev_down = down
+    let sc = win.get_scroll_wheel()
+    match sc [
+        Some(s) -> [
+            inp.scroll_y = s.1 as Float
+        ]
+        None -> [
+        ]
+    ]
+    let shift = win.is_key_down(Key::LeftShift) or win.is_key_down(Key::RightShift)
+    inp.shift = shift
+    inp.ctrl = win.is_key_down(Key::LeftCtrl) or win.is_key_down(Key::RightCtrl)
+        if win.is_key_pressed(Key::A, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("A")
+            ] else [
+                inp.chars.push("a")
+            ]
+        ]
+        if win.is_key_pressed(Key::B, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("B")
+            ] else [
+                inp.chars.push("b")
+            ]
+        ]
+        if win.is_key_pressed(Key::C, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("C")
+            ] else [
+                inp.chars.push("c")
+            ]
+        ]
+        if win.is_key_pressed(Key::D, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("D")
+            ] else [
+                inp.chars.push("d")
+            ]
+        ]
+        if win.is_key_pressed(Key::E, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("E")
+            ] else [
+                inp.chars.push("e")
+            ]
+        ]
+        if win.is_key_pressed(Key::F, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("F")
+            ] else [
+                inp.chars.push("f")
+            ]
+        ]
+        if win.is_key_pressed(Key::G, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("G")
+            ] else [
+                inp.chars.push("g")
+            ]
+        ]
+        if win.is_key_pressed(Key::H, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("H")
+            ] else [
+                inp.chars.push("h")
+            ]
+        ]
+        if win.is_key_pressed(Key::I, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("I")
+            ] else [
+                inp.chars.push("i")
+            ]
+        ]
+        if win.is_key_pressed(Key::J, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("J")
+            ] else [
+                inp.chars.push("j")
+            ]
+        ]
+        if win.is_key_pressed(Key::K, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("K")
+            ] else [
+                inp.chars.push("k")
+            ]
+        ]
+        if win.is_key_pressed(Key::L, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("L")
+            ] else [
+                inp.chars.push("l")
+            ]
+        ]
+        if win.is_key_pressed(Key::M, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("M")
+            ] else [
+                inp.chars.push("m")
+            ]
+        ]
+        if win.is_key_pressed(Key::N, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("N")
+            ] else [
+                inp.chars.push("n")
+            ]
+        ]
+        if win.is_key_pressed(Key::O, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("O")
+            ] else [
+                inp.chars.push("o")
+            ]
+        ]
+        if win.is_key_pressed(Key::P, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("P")
+            ] else [
+                inp.chars.push("p")
+            ]
+        ]
+        if win.is_key_pressed(Key::Q, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("Q")
+            ] else [
+                inp.chars.push("q")
+            ]
+        ]
+        if win.is_key_pressed(Key::R, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("R")
+            ] else [
+                inp.chars.push("r")
+            ]
+        ]
+        if win.is_key_pressed(Key::S, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("S")
+            ] else [
+                inp.chars.push("s")
+            ]
+        ]
+        if win.is_key_pressed(Key::T, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("T")
+            ] else [
+                inp.chars.push("t")
+            ]
+        ]
+        if win.is_key_pressed(Key::U, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("U")
+            ] else [
+                inp.chars.push("u")
+            ]
+        ]
+        if win.is_key_pressed(Key::V, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("V")
+            ] else [
+                inp.chars.push("v")
+            ]
+        ]
+        if win.is_key_pressed(Key::W, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("W")
+            ] else [
+                inp.chars.push("w")
+            ]
+        ]
+        if win.is_key_pressed(Key::X, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("X")
+            ] else [
+                inp.chars.push("x")
+            ]
+        ]
+        if win.is_key_pressed(Key::Y, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("Y")
+            ] else [
+                inp.chars.push("y")
+            ]
+        ]
+        if win.is_key_pressed(Key::Z, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("Z")
+            ] else [
+                inp.chars.push("z")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key0, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push(")")
+            ] else [
+                inp.chars.push("0")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key1, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("!")
+            ] else [
+                inp.chars.push("1")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key2, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("@")
+            ] else [
+                inp.chars.push("2")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key3, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("#")
+            ] else [
+                inp.chars.push("3")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key4, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("$")
+            ] else [
+                inp.chars.push("4")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key5, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("%")
+            ] else [
+                inp.chars.push("5")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key6, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("^")
+            ] else [
+                inp.chars.push("6")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key7, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("&")
+            ] else [
+                inp.chars.push("7")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key8, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("*")
+            ] else [
+                inp.chars.push("8")
+            ]
+        ]
+        if win.is_key_pressed(Key::Key9, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("(")
+            ] else [
+                inp.chars.push("9")
+            ]
+        ]
+        if win.is_key_pressed(Key::Comma, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("<")
+            ] else [
+                inp.chars.push(",")
+            ]
+        ]
+        if win.is_key_pressed(Key::Period, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push(">")
+            ] else [
+                inp.chars.push(".")
+            ]
+        ]
+        if win.is_key_pressed(Key::Minus, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("_")
+            ] else [
+                inp.chars.push("-")
+            ]
+        ]
+        if win.is_key_pressed(Key::Equal, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("+")
+            ] else [
+                inp.chars.push("=")
+            ]
+        ]
+        if win.is_key_pressed(Key::Slash, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("?")
+            ] else [
+                inp.chars.push("/")
+            ]
+        ]
+        if win.is_key_pressed(Key::Semicolon, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push(":")
+            ] else [
+                inp.chars.push(";")
+            ]
+        ]
+        if win.is_key_pressed(Key::Apostrophe, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("\"")
+            ] else [
+                inp.chars.push("'")
+            ]
+        ]
+        if win.is_key_pressed(Key::LeftBracket, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("{")
+            ] else [
+                inp.chars.push("[")
+            ]
+        ]
+        if win.is_key_pressed(Key::RightBracket, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("}")
+            ] else [
+                inp.chars.push("]")
+            ]
+        ]
+        if win.is_key_pressed(Key::Backslash, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push("|")
+            ] else [
+                inp.chars.push("\\")
+            ]
+        ]
+        if win.is_key_pressed(Key::Space, KeyRepeat::Yes) [
+            if shift [
+                inp.chars.push(" ")
+            ] else [
+                inp.chars.push(" ")
+            ]
+        ]
+        if win.is_key_pressed(Key::Backspace, KeyRepeat::Yes) [
+            inp.keys.push("Backspace")
+        ]
+        if win.is_key_pressed(Key::Delete, KeyRepeat::Yes) [
+            inp.keys.push("Delete")
+        ]
+        if win.is_key_pressed(Key::Enter, KeyRepeat::Yes) [
+            inp.keys.push("Enter")
+        ]
+        if win.is_key_pressed(Key::Left, KeyRepeat::Yes) [
+            inp.keys.push("Left")
+        ]
+        if win.is_key_pressed(Key::Right, KeyRepeat::Yes) [
+            inp.keys.push("Right")
+        ]
+        if win.is_key_pressed(Key::Up, KeyRepeat::Yes) [
+            inp.keys.push("Up")
+        ]
+        if win.is_key_pressed(Key::Down, KeyRepeat::Yes) [
+            inp.keys.push("Down")
+        ]
+        if win.is_key_pressed(Key::Home, KeyRepeat::Yes) [
+            inp.keys.push("Home")
+        ]
+        if win.is_key_pressed(Key::End, KeyRepeat::Yes) [
+            inp.keys.push("End")
+        ]
+        if win.is_key_pressed(Key::Tab, KeyRepeat::Yes) [
+            inp.keys.push("Tab")
+        ]
+        if win.is_key_pressed(Key::Escape, KeyRepeat::Yes) [
+            inp.keys.push("Escape")
+        ]
+    end inp
+]
