@@ -1,0 +1,28 @@
+include <draw>
+
+struct Theme [
+    primary: Int,
+    on_primary: Int,
+    primary_container: Int,
+    on_primary_container: Int,
+    secondary: Int,
+    surface: Int,
+    on_surface: Int,
+    surface_variant: Int,
+    on_surface_variant: Int,
+    background: Int,
+    outline: Int,
+    error: Int,
+    dark: Int,
+    body: Float,
+    title: Float,
+    headline: Float,
+    label: Float,
+    radius: Float
+]
+
+fun theme_light() -> Theme [
+    end Theme(rgb(103, 80, 164), rgb(255, 255, 255), rgb(234, 221, 255), rgb(33, 0, 93), rgb(98, 91, 113), rgb(254, 247, 255), rgb(29, 27, 32), rgb(231, 224, 236), rgb(73, 69, 79), rgb(254, 247, 255), rgb(121, 116, 126), rgb(179, 38, 30), 0, 16.0, 22.0, 32.0, 14.0, 12.0) ]
+
+fun theme_dark() -> Theme [
+    end Theme(rgb(208, 188, 255), rgb(56, 30, 114), rgb(79, 55, 139), rgb(234, 221, 255), rgb(204, 194, 220), rgb(20, 18, 24), rgb(230, 224, 233), rgb(73, 69, 79), rgb(202, 196, 208), rgb(20, 18, 24), rgb(147, 143, 153), rgb(242, 184, 181), 1, 16.0, 22.0, 32.0, 14.0, 12.0) ]
