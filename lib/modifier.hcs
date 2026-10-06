@@ -1,0 +1,167 @@
+struct Modifier [
+    wd: Float,
+    ht: Float,
+    fill_w: Float,
+    fill_h: Float,
+    min_w: Float,
+    min_h: Float,
+    pl: Float,
+    pt: Float,
+    pr: Float,
+    pb: Float,
+    wgt: Float,
+    bg: Int,
+    corner_r: Float,
+    bw: Float,
+    bc: Int,
+    shadow_e: Float,
+    alpha_v: Float,
+    ox: Float,
+    oy: Float,
+    do_clip: Int,
+    is_click: Int,
+    do_scroll: Int,
+    key_v: Int,
+    self_align: Int
+]
+
+fun modifier() -> Modifier [
+    end Modifier(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 1.0, 0.0, 0.0, 0, 0, 0, 0, -1)
+]
+
+impl Modifier [
+    pub fun width(self, v: Float) -> Modifier [
+        let m = self.clone()
+        m.wd = v
+        end m
+    ]
+    pub fun height(self, v: Float) -> Modifier [
+        let m = self.clone()
+        m.ht = v
+        end m
+    ]
+    pub fun size(self, w: Float, h: Float) -> Modifier [
+        let m = self.clone()
+        m.wd = w
+        m.ht = h
+        end m
+    ]
+    pub fun min_size(self, w: Float, h: Float) -> Modifier [
+        let m = self.clone()
+        m.min_w = w
+        m.min_h = h
+        end m
+    ]
+    pub fun fill_max_width(self) -> Modifier [
+        let m = self.clone()
+        m.fill_w = 1.0
+        end m
+    ]
+    pub fun fill_max_height(self) -> Modifier [
+        let m = self.clone()
+        m.fill_h = 1.0
+        end m
+    ]
+    pub fun fill_max_size(self) -> Modifier [
+        let m = self.clone()
+        m.fill_w = 1.0
+        m.fill_h = 1.0
+        end m
+    ]
+    pub fun fill_width(self, frac: Float) -> Modifier [
+        let m = self.clone()
+        m.fill_w = frac
+        end m
+    ]
+    pub fun fill_height(self, frac: Float) -> Modifier [
+        let m = self.clone()
+        m.fill_h = frac
+        end m
+    ]
+    pub fun padding(self, v: Float) -> Modifier [
+        let m = self.clone()
+        m.pl = v
+        m.pt = v
+        m.pr = v
+        m.pb = v
+        end m
+    ]
+    pub fun padding_xy(self, h: Float, v: Float) -> Modifier [
+        let m = self.clone()
+        m.pl = h
+        m.pr = h
+        m.pt = v
+        m.pb = v
+        end m
+    ]
+    pub fun padding_each(self, l: Float, t: Float, r: Float, b: Float) -> Modifier [
+        let m = self.clone()
+        m.pl = l
+        m.pt = t
+        m.pr = r
+        m.pb = b
+        end m
+    ]
+    pub fun weight(self, w: Float) -> Modifier [
+        let m = self.clone()
+        m.wgt = w
+        end m
+    ]
+    pub fun background(self, color: Int) -> Modifier [
+        let m = self.clone()
+        m.bg = color
+        end m
+    ]
+    pub fun corner(self, r: Float) -> Modifier [
+        let m = self.clone()
+        m.corner_r = r
+        end m
+    ]
+    pub fun border(self, w: Float, color: Int) -> Modifier [
+        let m = self.clone()
+        m.bw = w
+        m.bc = color
+        end m
+    ]
+    pub fun shadow(self, elevation: Float) -> Modifier [
+        let m = self.clone()
+        m.shadow_e = elevation
+        end m
+    ]
+    pub fun alpha(self, a: Float) -> Modifier [
+        let m = self.clone()
+        m.alpha_v = a
+        end m
+    ]
+    pub fun offset(self, x: Float, y: Float) -> Modifier [
+        let m = self.clone()
+        m.ox = x
+        m.oy = y
+        end m
+    ]
+    pub fun clip(self) -> Modifier [
+        let m = self.clone()
+        m.do_clip = 1
+        end m
+    ]
+    pub fun clickable(self) -> Modifier [
+        let m = self.clone()
+        m.is_click = 1
+        end m
+    ]
+    pub fun vertical_scroll(self) -> Modifier [
+        let m = self.clone()
+        m.do_scroll = 1
+        end m
+    ]
+    pub fun key(self, k: Int) -> Modifier [
+        let m = self.clone()
+        m.key_v = k
+        end m
+    ]
+    pub fun align(self, a: Int) -> Modifier [
+        let m = self.clone()
+        m.self_align = a
+        end m
+    ]
+]
