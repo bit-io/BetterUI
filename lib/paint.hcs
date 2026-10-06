@@ -1,0 +1,87 @@
+include <layout>
+
+fun paint_node(ui: Ui, gfx: NativeGfx, i: Int, alpha: Float, cmds: List<Cmd>) [
+    let n = ui.nodes[i].clone()
+    let m = n.m.clone()
+    let a = alpha * m.alpha_v
+    if m.shadow_e > 0.0 [
+        let sc = cmd_new(OP_SHADOW)
+        sc.x = n.x
+        sc.y = n.y
+        sc.w = n.w
+        sc.h = n.h
+        sc.r = m.corner_r
+        sc.sw = m.shadow_e
+        sc.color = color_scale_alpha(argb(70, 0, 0, 0), a)
+        cmds.push(sc)
+    ]
+    if color_alpha(m.bg) > 0 [
+        let fc = cmd_new(OP_FILL_RRECT)
+        fc.x = n.x
+        fc.y = n.y
+        fc.w = n.w
+        fc.h = n.h
+        fc.r = m.corner_r
+        fc.color = color_scale_alpha(m.bg, a)
+        cmds.push(fc)
+    ]
+    if m.bw > 0.0 [
+        let bc = cmd_new(OP_STROKE_RRECT)
+        bc.x = n.x
+        bc.y = n.y
+        bc.w = n.w
+        bc.h = n.h
+        bc.r = m.corner_r
+        bc.sw = m.bw
+        bc.color = color_scale_alpha(m.bc, a)
+        cmds.push(bc)
+    ]
+    let clipped = m.do_clip == 1 or m.do_scroll == 1
+    if clipped [
+        let cc = cmd_new(OP_CLIP_RRECT)
+        cc.x = n.x
+        cc.y = n.y
+        cc.w = n.w
+        cc.h = n.h
+        cc.r = m.corner_r
+        cmds.push(cc)
+    ]
+    if n.kind == K_TEXT [
+        let bold = n.bold == 1
+        let lh = native_line_height(gfx, n.size, bold)
+        let k = 0
+        while k < n.lines.len() [
+            let tc = cmd_new(OP_TEXT)
+            tc.x = n.x + m.pl
+            tc.y = n.y + m.pt + lh * (k as Float)
+            tc.h = n.size
+            tc.color = color_scale_alpha(n.color, a)
+            tc.text = n.lines[k].clone()
+            tc.bold = n.bold
+            cmds.push(tc)
+            k = k + 1
+        ]
+    ]
+    let k2 = 0
+    while k2 < n.children.len() [
+        paint_node(ui, gfx, n.children[k2], a, cmds)
+        k2 = k2 + 1
+    ]
+    if clipped [
+        cmds.push(cmd_new(OP_RESTORE))
+    ]
+    !! pasek przewijania
+    if m.do_scroll == 1 and n.scroll_max > 0.0 [
+        let off = dget_f(ui.floats, "scr:" + (n.id as Str), 0.0)
+        let barh = fmax(24.0, n.h * n.h / (n.h + n.scroll_max))
+        let bary = n.y + (n.h - barh) * (off / n.scroll_max)
+        let sb = cmd_new(OP_FILL_RRECT)
+        sb.x = n.x + n.w - 6.0
+        sb.y = bary
+        sb.w = 4.0
+        sb.h = barh
+        sb.r = 2.0
+        sb.color = color_scale_alpha(argb(110, 120, 120, 130), a)
+        cmds.push(sb)
+    ]
+]
