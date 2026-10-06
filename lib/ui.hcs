@@ -1,0 +1,414 @@
+include <draw>
+include <modifier>
+include <theme>
+include <native>
+
+const K_BOX: Int = 1
+const K_ROW: Int = 2
+const K_COLUMN: Int = 3
+const K_TEXT: Int = 4
+const K_SPACER: Int = 5
+
+!! Arrangement (rozmieszczenie na osi glownej Row/Column)
+const ARR_START: Int = 0
+const ARR_CENTER: Int = 1
+const ARR_END: Int = 2
+const ARR_SPACE_BETWEEN: Int = 3
+const ARR_SPACE_AROUND: Int = 4
+const ARR_SPACE_EVENLY: Int = 5
+
+!! Alignment na osi poprzecznej (Row/Column)
+const ALIGN_START: Int = 0
+const ALIGN_CENTER: Int = 1
+const ALIGN_END: Int = 2
+
+!! Alignment w Box (9 pozycji): rzad*3 + kolumna
+const ALIGN_TOP_START: Int = 0
+const ALIGN_TOP_CENTER: Int = 1
+const ALIGN_TOP_END: Int = 2
+const ALIGN_CENTER_START: Int = 3
+const ALIGN_BOX_CENTER: Int = 4
+const ALIGN_CENTER_END: Int = 5
+const ALIGN_BOTTOM_START: Int = 6
+const ALIGN_BOTTOM_CENTER: Int = 7
+const ALIGN_BOTTOM_END: Int = 8
+
+struct Node [
+    kind: Int,
+    id: Int,
+    parent: Int,
+    children: List<Int>,
+    m: Modifier,
+    text: Str,
+    size: Float,
+    color: Int,
+    bold: Int,
+    arr: Int,
+    align: Int,
+    spacing: Float,
+    slot: Int,
+    force_w: Float,
+    force_h: Float,
+    x: Float,
+    y: Float,
+    w: Float,
+    h: Float,
+    lines: List<Str>,
+    scroll_max: Float
+]
+
+fun node_new(kind: Int, id: Int, parent: Int, m: Modifier) -> Node [
+    end Node(kind, id, parent, [], m, "", 0.0, 0, 0, 0, 0, 0.0, 0, -1.0, -1.0, 0.0, 0.0, 0.0, 0.0, [], 0.0)
+]
+
+struct Ui [
+    width: Float,
+    height: Float,
+    nodes: List<Node>,
+    prev_nodes: List<Node>,
+    prev_index: Dict<Str, Int>,
+    stack: List<Int>,
+    ints: Dict<Str, Int>,
+    floats: Dict<Str, Float>,
+    strs: Dict<Str, Str>,
+    input: Input,
+    hot_id: Int,
+    active_id: Int,
+    focus_id: Int,
+    scroll_id: Int,
+    time: Float,
+    dt: Float,
+    last_ms: Int,
+    frame: Int,
+    animating: Bool,
+    theme: Theme,
+    last_cmds: List<Cmd>,
+    pending_key: Int
+]
+
+fun ui_new(w: Float, h: Float) -> Ui [
+    let pi: Dict<Str, Int> = dict()
+    let si: Dict<Str, Int> = dict()
+    let sf: Dict<Str, Float> = dict()
+    let ss: Dict<Str, Str> = dict()
+    end Ui(w, h, [], [], pi, [], si, sf, ss, input_new(), 0, 0, 0, 0, 0.0, 0.016, 0, 0, false, theme_light(), [], 0)
+]
+
+!! ---- male helpery ----
+fun fmax(a: Float, b: Float) -> Float [
+    if a > b [
+        end a
+    ]
+    end b
+]
+
+fun fmin(a: Float, b: Float) -> Float [
+    if a < b [
+        end a
+    ]
+    end b
+]
+
+fun fclamp(v: Float, lo: Float, hi: Float) -> Float [
+    if v < lo [
+        end lo
+    ]
+    if v > hi [
+        end hi
+    ]
+    end v
+]
+
+fun dget_i(d: Dict<Str, Int>, k: Str, def: Int) -> Int [
+    match d.fetch(k) [
+        Some(v) -> [
+            end v
+        ]
+        None -> [
+            end def
+        ]
+    ]
+    end def
+]
+
+fun dget_f(d: Dict<Str, Float>, k: Str, def: Float) -> Float [
+    match d.fetch(k) [
+        Some(v) -> [
+            end v
+        ]
+        None -> [
+            end def
+        ]
+    ]
+    end def
+]
+
+fun dget_s(d: Dict<Str, Str>, k: Str, def: Str) -> Str [
+    match d.fetch(k) [
+        Some(v) -> [
+            end v
+        ]
+        None -> [
+            end def
+        ]
+    ]
+    end def
+]
+
+!! ---- kompozycja: otwieranie/zamykanie wezlow ----
+fun ui_top(ui: Ui) -> Int [
+    if ui.stack.len() == 0 [
+        end -1
+    ]
+    end ui.stack[ui.stack.len() - 1]
+]
+
+!! Otwiera wezel (dziecko biezacego rodzica) i zwraca jego indeks.
+fun ui_open(ui: Ui, kind: Int, m: Modifier) -> Int [
+    let parent = ui_top(ui)
+    let pid = 7
+    let idx = 0
+    if parent >= 0 [
+        pid = ui.nodes[parent].id
+        idx = ui.nodes[parent].children.len()
+    ]
+    let id = (pid * 31 + (idx + 1) * 7919 + kind * 104729 + (m.key_v + 1) * 15485863 + ui.pending_key * 32452843) % 2147483647
+    ui.pending_key = 0
+    let n = node_new(kind, id, parent, m)
+    let i = ui.nodes.len()
+    ui.nodes.push(n)
+    if parent >= 0 [
+        ui.nodes[parent].children.push(i)
+    ]
+    ui.stack.push(i)
+    end i
+]
+
+fun ui_close(ui: Ui, kind: Int) [
+    let top = ui_top(ui)
+    if top < 0 [
+        elog("BetterUI: za duzo End*() - brak otwartego kontenera")
+        end
+    ]
+    if ui.nodes[top].kind != kind [
+        elog("BetterUI: niezgodne zamkniecie kontenera (kind " + (ui.nodes[top].kind as Str) + " zamkniety jako " + (kind as Str) + ")")
+    ]
+    ui.stack.pop()
+]
+
+!! `Key(ui, k)` - jawny klucz dla NASTEPNEGO wezla (jak `key()` w Compose; uzyj w petlach).
+fun Key(ui: Ui, k: Int) [
+    ui.pending_key = k + 1
+]
+
+!! ---- stan (remember) ----
+struct IntState [
+    key: Str
+]
+struct FloatState [
+    key: Str
+]
+struct BoolState [
+    key: Str
+]
+struct StrState [
+    key: Str
+]
+
+fun ui_slot_key(ui: Ui) -> Str [
+    let cur = ui_top(ui)
+    ui.nodes[cur].slot = ui.nodes[cur].slot + 1
+    end (ui.nodes[cur].id as Str) + "#" + (ui.nodes[cur].slot as Str)
+]
+
+fun remember_int(ui: Ui, init: Int) -> IntState [
+    let k = ui_slot_key(ui)
+    match ui.ints.fetch(k.clone()) [
+        Some(_v) -> [
+        ]
+        None -> [
+            ui.ints.insert(k.clone(), init)
+        ]
+    ]
+    end IntState(k)
+]
+
+fun remember_float(ui: Ui, init: Float) -> FloatState [
+    let k = ui_slot_key(ui)
+    match ui.floats.fetch(k.clone()) [
+        Some(_v) -> [
+        ]
+        None -> [
+            ui.floats.insert(k.clone(), init)
+        ]
+    ]
+    end FloatState(k)
+]
+
+fun remember_bool(ui: Ui, init: Bool) -> BoolState [
+    let k = ui_slot_key(ui)
+    match ui.ints.fetch(k.clone()) [
+        Some(_v) -> [
+        ]
+        None -> [
+            let iv = 0
+            if init [
+                iv = 1
+            ]
+            ui.ints.insert(k.clone(), iv)
+        ]
+    ]
+    end BoolState(k)
+]
+
+fun remember_str(ui: Ui, init: Str) -> StrState [
+    let k = ui_slot_key(ui)
+    match ui.strs.fetch(k.clone()) [
+        Some(_v) -> [
+        ]
+        None -> [
+            ui.strs.insert(k.clone(), init)
+        ]
+    ]
+    end StrState(k)
+]
+
+fun int_get(ui: Ui, s: IntState) -> Int [
+    end dget_i(ui.ints, s.key.clone(), 0)
+]
+fun int_set(ui: Ui, s: IntState, v: Int) [
+    ui.ints.insert(s.key.clone(), v)
+]
+fun float_get(ui: Ui, s: FloatState) -> Float [
+    end dget_f(ui.floats, s.key.clone(), 0.0)
+]
+fun float_set(ui: Ui, s: FloatState, v: Float) [
+    ui.floats.insert(s.key.clone(), v)
+]
+fun bool_get(ui: Ui, s: BoolState) -> Bool [
+    end dget_i(ui.ints, s.key.clone(), 0) == 1
+]
+fun bool_set(ui: Ui, s: BoolState, v: Bool) [
+    let iv = 0
+    if v [
+        iv = 1
+    ]
+    ui.ints.insert(s.key.clone(), iv)
+]
+fun bool_toggle(ui: Ui, s: BoolState) -> Bool [
+    let nv = not bool_get(ui, s.clone())
+    bool_set(ui, s, nv)
+    end nv
+]
+fun str_get(ui: Ui, s: StrState) -> Str [
+    end dget_s(ui.strs, s.key.clone(), "")
+]
+fun str_set(ui: Ui, s: StrState, v: Str) [
+    ui.strs.insert(s.key.clone(), v)
+]
+
+!! ---- animacje ----
+!! Plynnie dazy do `target` (wygladzanie wykladnicze, jak animateFloatAsState).
+!! speed ~ 10.0 = szybko, 4.0 = wolno. Zwraca biezaca wartosc.
+fun animate_float_speed(ui: Ui, target: Float, speed: Float) -> Float [
+    let k = ui_slot_key(ui)
+    let cur = target
+    match ui.floats.fetch(k.clone()) [
+        Some(v) -> [
+            cur = v
+        ]
+        None -> [
+        ]
+    ]
+    let diff = target - cur
+    if diff > 0.001 or diff < -0.001 [
+        let f = 1.0 - (-(speed * ui.dt)).exp()
+        cur = cur + diff * f
+        ui.animating = true
+    ] else [
+        cur = target
+    ]
+    ui.floats.insert(k, cur)
+    end cur
+]
+
+fun animate_float(ui: Ui, target: Float) -> Float [
+    end animate_float_speed(ui, target, 12.0)
+]
+
+!! ---- interakcje (immediate-mode na rozmiarach z poprzedniej klatki) ----
+struct Interact [
+    hovered: Bool,
+    pressed: Bool,
+    clicked: Bool,
+    press_started: Bool
+]
+
+fun ui_interact(ui: Ui, id: Int) -> Interact [
+    let hov = ui.hot_id == id
+    let started = false
+    if hov and ui.input.pressed [
+        ui.active_id = id
+        started = true
+    ]
+    let pressed = ui.active_id == id and ui.input.down
+    let clicked = ui.input.released and ui.active_id == id and hov
+    end Interact(hov, pressed, clicked, started)
+]
+
+!! Prostokat wezla z poprzedniej klatki: [x, y, w, h] albo pusta lista.
+fun ui_prev_rect(ui: Ui, id: Int) -> List<Float> [
+    let r: List<Float> = []
+    match ui.prev_index.fetch(id as Str) [
+        Some(i) -> [
+            r.push(ui.prev_nodes[i].x)
+            r.push(ui.prev_nodes[i].y)
+            r.push(ui.prev_nodes[i].w)
+            r.push(ui.prev_nodes[i].h)
+        ]
+        None -> [
+        ]
+    ]
+    end r
+]
+
+fun node_contains(n: Node, mx: Float, my: Float) -> Bool [
+    end mx >= n.x and mx < n.x + n.w and my >= n.y and my < n.y + n.h
+]
+
+!! Czy punkt jest widoczny dla wezla `i` (nie ucieto go przez clip/scroll przodka)?
+fun ui_visible_at(nodes: List<Node>, i: Int, mx: Float, my: Float) -> Bool [
+    let p = nodes[i].parent
+    while p >= 0 [
+        if nodes[p].m.do_clip == 1 or nodes[p].m.do_scroll == 1 [
+            if not node_contains(nodes[p].clone(), mx, my) [
+                end false
+            ]
+        ]
+        p = nodes[p].parent
+    ]
+    end true
+]
+
+!! Wylicza hot_id (najwyzszy klikalny wezel pod kursorem) i scroll_id z poprzedniej klatki.
+fun ui_compute_hot(ui: Ui) [
+    ui.hot_id = 0
+    ui.scroll_id = 0
+    let mx = ui.input.mx
+    let my = ui.input.my
+    let i = ui.prev_nodes.len() - 1
+    while i >= 0 [
+        let n = ui.prev_nodes[i].clone()
+        if node_contains(n.clone(), mx, my) [
+            if n.m.is_click == 1 and ui.hot_id == 0 [
+                if ui_visible_at(ui.prev_nodes.clone(), i, mx, my) [
+                    ui.hot_id = n.id
+                ]
+            ]
+            if n.m.do_scroll == 1 and ui.scroll_id == 0 [
+                ui.scroll_id = n.id
+            ]
+        ]
+        i = i - 1
+    ]
+]
