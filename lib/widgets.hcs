@@ -1,0 +1,427 @@
+include <app>
+
+!! ================= tekst =================
+fun TextStyled(ui: Ui, s: Str, size: Float, color: Int, bold: Bool) [
+    let i = ui_open(ui, K_TEXT, modifier())
+    ui.nodes[i].text = s
+    ui.nodes[i].size = size
+    ui.nodes[i].color = color
+    if bold [
+        ui.nodes[i].bold = 1
+    ]
+    ui_close(ui, K_TEXT)
+]
+
+fun Text(ui: Ui, s: Str) [
+    let body = ui.theme.body
+    let col = ui.theme.on_surface
+    TextStyled(ui, s, body, col, false)
+]
+
+fun TextColored(ui: Ui, s: Str, color: Int) [
+    let body = ui.theme.body
+    TextStyled(ui, s, body, color, false)
+]
+
+fun Title(ui: Ui, s: Str) [
+    let sz = ui.theme.title
+    let col = ui.theme.on_surface
+    TextStyled(ui, s, sz, col, true)
+]
+
+fun Headline(ui: Ui, s: Str) [
+    let sz = ui.theme.headline
+    let col = ui.theme.on_surface
+    TextStyled(ui, s, sz, col, true)
+]
+
+fun Label(ui: Ui, s: Str) [
+    let sz = ui.theme.label
+    let col = ui.theme.on_surface_variant
+    TextStyled(ui, s, sz, col, false)
+]
+
+!! ================= uklad =================
+fun Spacer(ui: Ui, m: Modifier) [
+    ui_open(ui, K_SPACER, m)
+    ui_close(ui, K_SPACER)
+]
+
+fun SpacerW(ui: Ui, w: Float) [
+    Spacer(ui, modifier().width(w))
+]
+
+fun SpacerH(ui: Ui, h: Float) [
+    Spacer(ui, modifier().height(h))
+]
+
+fun Column(ui: Ui, m: Modifier) [
+    ui_open(ui, K_COLUMN, m)
+]
+
+!! Column z pelna konfiguracja: arrangement (ARR_*), alignment poprzeczny (ALIGN_*), odstep.
+fun ColumnWith(ui: Ui, m: Modifier, arr: Int, align: Int, spacing: Float) [
+    let i = ui_open(ui, K_COLUMN, m)
+    ui.nodes[i].arr = arr
+    ui.nodes[i].align = align
+    ui.nodes[i].spacing = spacing
+]
+
+fun EndColumn(ui: Ui) [
+    ui_close(ui, K_COLUMN)
+]
+
+fun ScrollColumn(ui: Ui, m: Modifier) [
+    ui_open(ui, K_COLUMN, m.vertical_scroll())
+]
+
+fun Row(ui: Ui, m: Modifier) [
+    ui_open(ui, K_ROW, m)
+]
+
+fun RowWith(ui: Ui, m: Modifier, arr: Int, align: Int, spacing: Float) [
+    let i = ui_open(ui, K_ROW, m)
+    ui.nodes[i].arr = arr
+    ui.nodes[i].align = align
+    ui.nodes[i].spacing = spacing
+]
+
+fun EndRow(ui: Ui) [
+    ui_close(ui, K_ROW)
+]
+
+fun Box(ui: Ui, m: Modifier) [
+    ui_open(ui, K_BOX, m)
+]
+
+fun BoxAlign(ui: Ui, m: Modifier, align: Int) [
+    let i = ui_open(ui, K_BOX, m)
+    ui.nodes[i].align = align
+]
+
+fun EndBox(ui: Ui) [
+    ui_close(ui, K_BOX)
+]
+
+!! Klikalny Box z wlasna trescia: `if Clickable(ui, m) [ ... ]` ... `EndBox(ui)`.
+fun Clickable(ui: Ui, m: Modifier) -> Bool [
+    let i = ui_open(ui, K_BOX, m.clickable())
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    end it.clicked
+]
+
+fun Divider(ui: Ui) [
+    let c = color_with_alpha(ui.theme.outline, 90)
+    Spacer(ui, modifier().fill_max_width().height(1.0).background(c))
+]
+
+!! ================= Card / Surface =================
+fun Card(ui: Ui, m: Modifier) [
+    let bg = ui.theme.surface_variant
+    let r = ui.theme.radius
+    ui_open(ui, K_COLUMN, m.background(bg).corner(r + 2.0).shadow(5.0).padding(16.0))
+]
+
+fun EndCard(ui: Ui) [
+    ui_close(ui, K_COLUMN)
+]
+
+!! Spojny kolorowy blok (jak Surface).
+fun Surface(ui: Ui, m: Modifier, color: Int) [
+    ui_open(ui, K_BOX, m.background(color))
+]
+
+fun EndSurface(ui: Ui) [
+    ui_close(ui, K_BOX)
+]
+
+!! ================= przyciski =================
+!! style: 0 = filled, 1 = outlined, 2 = text, 3 = tonal
+fun ButtonStyled(ui: Ui, label: Str, style: Int) -> Bool [
+    let t = ui.theme.clone()
+    let base = t.primary
+    let fg = t.on_primary
+    if style == 3 [
+        base = t.primary_container
+        fg = t.on_primary_container
+    ]
+    let m = modifier().corner(20.0).padding_xy(24.0, 10.0).clickable().min_size(64.0, 40.0)
+    let i = ui_open(ui, K_BOX, m)
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let tint = 0.0
+    if it.pressed [
+        tint = 0.22
+    ] elif it.hovered [
+        tint = 0.10
+    ]
+    if style == 0 or style == 3 [
+        let bg = color_lerp(base, rgb(255, 255, 255), tint)
+        if t.dark == 1 [
+            bg = color_lerp(base, rgb(0, 0, 0), tint)
+        ]
+        ui.nodes[i].m.bg = bg
+    ] else [
+        fg = t.primary
+        if tint > 0.0 [
+            ui.nodes[i].m.bg = color_with_alpha(t.primary, (tint * 120.0) as Int)
+        ]
+        if style == 1 [
+            ui.nodes[i].m.bw = 1.0
+            ui.nodes[i].m.bc = t.outline
+        ]
+    ]
+    TextStyled(ui, label, t.body, fg, true)
+    ui_close(ui, K_BOX)
+    end it.clicked
+]
+
+fun Button(ui: Ui, label: Str) -> Bool [
+    end ButtonStyled(ui, label, 0)
+]
+
+fun OutlinedButton(ui: Ui, label: Str) -> Bool [
+    end ButtonStyled(ui, label, 1)
+]
+
+fun TextButton(ui: Ui, label: Str) -> Bool [
+    end ButtonStyled(ui, label, 2)
+]
+
+fun TonalButton(ui: Ui, label: Str) -> Bool [
+    end ButtonStyled(ui, label, 3)
+]
+
+!! ================= Checkbox / Radio / Switch =================
+fun Checkbox(ui: Ui, st: BoolState, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let r = ui_open(ui, K_ROW, modifier().clickable().padding(4.0))
+    ui.nodes[r].align = ALIGN_CENTER
+    ui.nodes[r].spacing = 12.0
+    let id = ui.nodes[r].id
+    let it = ui_interact(ui, id)
+    let checked = bool_get(ui, st.clone())
+    let changed = false
+    if it.clicked [
+        checked = bool_toggle(ui, st.clone())
+        changed = true
+    ]
+    let bm = modifier().size(22.0, 22.0).corner(4.0)
+    if checked [
+        bm = bm.background(t.primary)
+    ] else [
+        bm = bm.border(2.0, t.outline)
+    ]
+    let b = ui_open(ui, K_BOX, bm)
+    ui.nodes[b].align = ALIGN_BOX_CENTER
+    if checked [
+        TextStyled(ui, "✓", 16.0, t.on_primary, true)
+    ]
+    ui_close(ui, K_BOX)
+    Text(ui, label)
+    ui_close(ui, K_ROW)
+    end changed
+]
+
+!! Radio: `st` trzyma indeks wybranej opcji; ta opcja ma numer `index`.
+fun RadioButton(ui: Ui, st: IntState, index: Int, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let r = ui_open(ui, K_ROW, modifier().clickable().padding(4.0))
+    ui.nodes[r].align = ALIGN_CENTER
+    ui.nodes[r].spacing = 12.0
+    let id = ui.nodes[r].id
+    let it = ui_interact(ui, id)
+    let changed = false
+    if it.clicked [
+        int_set(ui, st.clone(), index)
+        changed = true
+    ]
+    let sel = int_get(ui, st.clone()) == index
+    let oc = t.outline
+    if sel [
+        oc = t.primary
+    ]
+    let b = ui_open(ui, K_BOX, modifier().size(20.0, 20.0).corner(10.0).border(2.0, oc))
+    ui.nodes[b].align = ALIGN_BOX_CENTER
+    if sel [
+        Spacer(ui, modifier().size(10.0, 10.0).corner(5.0).background(t.primary))
+    ]
+    ui_close(ui, K_BOX)
+    Text(ui, label)
+    ui_close(ui, K_ROW)
+    end changed
+]
+
+fun Switch(ui: Ui, st: BoolState) -> Bool [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().size(52.0, 32.0).corner(16.0).clickable())
+    ui.nodes[i].align = ALIGN_CENTER_START
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let changed = false
+    if it.clicked [
+        let nv = bool_toggle(ui, st.clone())
+        changed = true
+    ]
+    let on = bool_get(ui, st.clone())
+    let target = 0.0
+    if on [
+        target = 1.0
+    ]
+    let k = animate_float(ui, target)
+    ui.nodes[i].m.bg = color_lerp(t.surface_variant, t.primary, k)
+    let bc = color_lerp(t.outline, t.primary, k)
+    ui.nodes[i].m.bw = 2.0
+    ui.nodes[i].m.bc = bc
+    let thumb = color_lerp(t.outline, t.on_primary, k)
+    let size = 16.0 + 8.0 * k
+    let off = 8.0 + 20.0 * k - (size - 16.0) / 2.0
+    Spacer(ui, modifier().size(size, size).corner(size / 2.0).background(thumb).offset(off - 8.0 + 4.0, 0.0))
+    ui_close(ui, K_BOX)
+    end changed
+]
+
+!! ================= Slider =================
+fun Slider(ui: Ui, st: FloatState, lo: Float, hi: Float) -> Bool [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().fill_max_width().height(32.0).clickable())
+    ui.nodes[i].align = ALIGN_CENTER_START
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let rect = ui_prev_rect(ui, id)
+    let x0 = 0.0
+    let w = 200.0
+    if rect.len() == 4 [
+        x0 = rect[0]
+        w = rect[2]
+    ]
+    let changed = false
+    if it.pressed [
+        let span = fmax(1.0, w - 20.0)
+        let f = fclamp((ui.input.mx - x0 - 10.0) / span, 0.0, 1.0)
+        float_set(ui, st.clone(), lo + f * (hi - lo))
+        changed = true
+    ]
+    let v = float_get(ui, st.clone())
+    let frac = 0.0
+    if hi > lo [
+        frac = fclamp((v - lo) / (hi - lo), 0.0, 1.0)
+    ]
+    let travel = fmax(0.0, w - 20.0)
+    Spacer(ui, modifier().fill_max_width().height(4.0).corner(2.0).background(t.surface_variant))
+    Spacer(ui, modifier().width(frac * travel + 10.0).height(4.0).corner(2.0).background(t.primary))
+    let tc = t.primary
+    if it.pressed [
+        tc = color_lerp(t.primary, rgb(0, 0, 0), 0.15)
+    ]
+    Spacer(ui, modifier().size(20.0, 20.0).corner(10.0).background(tc).shadow(3.0).offset(frac * travel, 0.0))
+    ui_close(ui, K_BOX)
+    end changed
+]
+
+!! ================= wskaznik postepu =================
+fun LinearProgress(ui: Ui, frac: Float) [
+    let t = ui.theme.clone()
+    let f = fclamp(frac, 0.0, 1.0)
+    ui_open(ui, K_BOX, modifier().fill_max_width().height(6.0).corner(3.0).background(t.surface_variant).clip())
+    Spacer(ui, modifier().fill_width(f).height(6.0).corner(3.0).background(t.primary))
+    ui_close(ui, K_BOX)
+]
+
+!! ================= TextField =================
+!! Pole tekstowe: klik ustawia fokus; litery, Backspace/Delete, strzalki, Home/End.
+!! (klawiatura US, tylko ASCII - ograniczenie backendu okna)
+fun TextField(ui: Ui, st: StrState, hint: Str) -> Bool [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().fill_max_width().padding_xy(14.0, 12.0).corner(4.0).clickable().min_size(0.0, 48.0))
+    ui.nodes[i].align = ALIGN_CENTER_START
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    if it.press_started [
+        ui.focus_id = id
+    ]
+    let focused = ui.focus_id == id
+    let text = str_get(ui, st.clone())
+    let cur_st = remember_int(ui, text.len())
+    let cur = int_get(ui, cur_st.clone())
+    cur = imin(cur, text.len())
+    let changed = false
+    if focused [
+        let chars = ui.input.chars.clone()
+        let ci = 0
+        while ci < chars.len() [
+            text = text.slice(0, cur) + chars[ci].clone() + text.slice(cur, text.len())
+            cur = cur + 1
+            changed = true
+            ci = ci + 1
+        ]
+        let keys = ui.input.keys.clone()
+        let ki = 0
+        while ki < keys.len() [
+            let key = keys[ki].clone()
+            if key == "Backspace" and cur > 0 [
+                text = text.slice(0, cur - 1) + text.slice(cur, text.len())
+                cur = cur - 1
+                changed = true
+            ] elif key == "Delete" and cur < text.len() [
+                text = text.slice(0, cur) + text.slice(cur + 1, text.len())
+                changed = true
+            ] elif key == "Left" and cur > 0 [
+                cur = cur - 1
+            ] elif key == "Right" and cur < text.len() [
+                cur = cur + 1
+            ] elif key == "Home" [
+                cur = 0
+            ] elif key == "End" [
+                cur = text.len()
+            ]
+            ki = ki + 1
+        ]
+        str_set(ui, st.clone(), text.clone())
+        int_set(ui, cur_st.clone(), cur)
+        ui.animating = true
+    ]
+    let bc = t.outline
+    let bw = 1.0
+    if focused [
+        bc = t.primary
+        bw = 2.0
+    ]
+    ui.nodes[i].m.bw = bw
+    ui.nodes[i].m.bc = bc
+    let r = ui_open(ui, K_ROW, modifier())
+    ui.nodes[r].align = ALIGN_CENTER
+    if text.len() == 0 and not focused [
+        TextStyled(ui, hint, t.body, t.on_surface_variant, false)
+    ] else [
+        TextStyled(ui, text.slice(0, cur), t.body, t.on_surface, false)
+    ]
+    let blink = ((ui.time * 2.0) as Int) % 2 == 0
+    let cc = 0
+    if focused and blink [
+        cc = t.primary
+    ]
+    Spacer(ui, modifier().size(2.0, 20.0).background(cc))
+    TextStyled(ui, text.slice(cur, text.len()), t.body, t.on_surface, false)
+    ui_close(ui, K_ROW)
+    ui_close(ui, K_BOX)
+    end changed
+]
+
+fun imin(a: Int, b: Int) -> Int [
+    if a < b [
+        end a
+    ]
+    end b
+]
+
+!! ================= TopAppBar =================
+fun TopAppBar(ui: Ui, title: Str) [
+    let t = ui.theme.clone()
+    let r = ui_open(ui, K_ROW, modifier().fill_max_width().height(56.0).background(t.primary).padding_xy(16.0, 0.0))
+    ui.nodes[r].align = ALIGN_CENTER
+    TextStyled(ui, title, t.title, t.on_primary, true)
+    ui_close(ui, K_ROW)
+]
