@@ -1,1 +1,6 @@
-
+[package]
+-> name        => BetterUI
+-> version     => 0.1.0
+-> using       => 0.5
+-> description => BetterUI: deklaratywne UI w stylu Jetpack Compose dla Linuksa/x86_64. 100% HackerScript, rysowanie przez Skia (skia-safe), okno X11 przez minifb.
+-> lang        => HackerScript
