@@ -1,0 +1,36 @@
+using <0.5>
+get <bit:BetterUI>
+
+!! Najmniejsza aplikacja BetterUI - odpowiednik Compose "Counter".
+!!
+!! Compose:                                   BetterUI (HackerScript nie ma domkniec):
+!!   var count by remember { mutableStateOf(0) }     let count = remember_int(ui, 0)
+!!   Button(onClick = { count++ }) { Text("+") }      if Button(ui, "+") [ ... ]
+!!   Column(Modifier.padding(16.dp)) { ... }          Column(ui, modifier().padding(16.0)) ... EndColumn(ui)
+
+fun Counter(ui: Ui) [
+    let count = remember_int(ui, 0)
+    Column(ui, modifier().fill_max_size().padding(24.0))
+    let c = int_get(ui, count.clone())
+    Headline(ui, "Licznik: " + (c as Str))
+    SpacerH(ui, 16.0)
+    Row(ui, modifier())
+    if Button(ui, "+1") [
+        int_set(ui, count.clone(), c + 1)
+    ]
+    SpacerW(ui, 8.0)
+    if OutlinedButton(ui, "-1") [
+        int_set(ui, count.clone(), c - 1)
+    ]
+    EndRow(ui)
+    EndColumn(ui)
+]
+
+fun main() [
+    let gfx = window_open("Counter", 360, 240)
+    let ui = ui_new(360.0, 240.0)
+    while frame_begin(ui, gfx) [
+        Counter(ui)
+        frame_end(ui, gfx)
+    ]
+]
