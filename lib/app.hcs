@@ -1,3 +1,10 @@
+include <draw>
+include <native>
+include <theme>
+include <themes>
+include <modifier>
+include <ui>
+include <layout>
 include <paint>
 
 fun window_open(title: Str, w: Int, h: Int) -> NativeGfx [
@@ -15,6 +22,11 @@ fun ui_set_dark(ui: Ui, dark: Bool) [
     ] else [
         ui.theme = theme_light()
     ]
+]
+
+!! Ustawia motyw z jednego koloru akcentu (patrz `theme_accent` w themes.hcs).
+fun ui_set_accent(ui: Ui, accent: Int, dark: Bool) [
+    ui.theme = theme_accent(accent, dark)
 ]
 
 !! Poczatek klatki z gotowym wejsciem (uzywane przez testy i przez frame_begin).
