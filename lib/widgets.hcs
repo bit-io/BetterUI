@@ -1,3 +1,11 @@
+include <draw>
+include <native>
+include <theme>
+include <themes>
+include <modifier>
+include <ui>
+include <layout>
+include <paint>
 include <app>
 
 !! ================= tekst =================
@@ -120,7 +128,9 @@ fun Divider(ui: Ui) [
 fun Card(ui: Ui, m: Modifier) [
     let bg = ui.theme.surface_variant
     let r = ui.theme.radius
-    ui_open(ui, K_COLUMN, m.background(bg).corner(r + 2.0).shadow(5.0).padding(16.0))
+    !! ladniejsza karta: miekki cien + delikatna ramka (jak Material 3 "elevated/outlined")
+    let bc = color_with_alpha(ui.theme.outline, 50)
+    ui_open(ui, K_COLUMN, m.background(bg).corner(r + 2.0).shadow(3.0).border(1.0, bc).padding(16.0))
 ]
 
 fun EndCard(ui: Ui) [
