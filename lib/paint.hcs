@@ -1,3 +1,8 @@
+include <draw>
+include <native>
+include <theme>
+include <modifier>
+include <ui>
 include <layout>
 
 fun paint_node(ui: Ui, gfx: NativeGfx, i: Int, alpha: Float, cmds: List<Cmd>) [
