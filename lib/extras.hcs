@@ -1,0 +1,357 @@
+include <draw>
+include <native>
+include <theme>
+include <themes>
+include <modifier>
+include <ui>
+include <layout>
+include <paint>
+include <app>
+include <widgets>
+
+!! ===========================================================================
+!! BetterUI - widgety dodatkowe (0.1), zlozone z tych samych prymitywow co
+!! `widgets.hcs` (Box/Row/Column/Text/Spacer + ui_interact), wiec nie wymagaja
+!! zmian w backendzie Skii. Konwencja jak wszedzie: widgety klikalne zwracaja
+!! `Bool` (true = zmiana/klikniecie w tej klatce).
+!! ===========================================================================
+
+!! ================= IconButton / FAB =================
+!! Okragly przycisk z jednym glifem (np. "+", "x", "i"). Zwraca true przy kliknieciu.
+fun IconButton(ui: Ui, glyph: Str) -> Bool [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().size(40.0, 40.0).corner(20.0).clickable())
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    if it.pressed [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 50)
+    ] elif it.hovered [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 24)
+    ]
+    TextStyled(ui, glyph, t.title, t.on_surface_variant, true)
+    ui_close(ui, K_BOX)
+    end it.clicked
+]
+
+!! Floating Action Button: wypelniony, z cieniem; uzyj w `Box` z `BoxAlign(..., ALIGN_BOTTOM_END)`.
+fun FloatingActionButton(ui: Ui, glyph: Str) -> Bool [
+    let t = ui.theme.clone()
+    let m = modifier().size(56.0, 56.0).corner(16.0).shadow(8.0).clickable()
+    let i = ui_open(ui, K_BOX, m)
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let tint = 0.0
+    if it.pressed [
+        tint = 0.22
+    ] elif it.hovered [
+        tint = 0.10
+    ]
+    let bg = color_lerp(t.primary_container, rgb(0, 0, 0), tint)
+    if t.dark == 0 [
+        bg = color_lerp(t.primary_container, rgb(255, 255, 255), tint)
+    ]
+    ui.nodes[i].m.bg = bg
+    TextStyled(ui, glyph, 26.0, t.on_primary_container, true)
+    ui_close(ui, K_BOX)
+    end it.clicked
+]
+
+!! ================= Chip / FilterChip =================
+!! Zwykly chip (akcja): `if Chip(ui, "Tag") [ ... ]`.
+fun Chip(ui: Ui, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let m = modifier().corner(8.0).padding_xy(12.0, 6.0).border(1.0, t.outline).clickable()
+    let i = ui_open(ui, K_BOX, m)
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    if it.pressed [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 40)
+    ] elif it.hovered [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 18)
+    ]
+    TextStyled(ui, label, t.label, t.on_surface_variant, false)
+    ui_close(ui, K_BOX)
+    end it.clicked
+]
+
+!! Chip z przelaczanym stanem (`BoolState`); zaznaczony jest w kolorze `primary_container` z ptaszkiem.
+fun FilterChip(ui: Ui, st: BoolState, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let on = bool_get(ui, st.clone())
+    let m = modifier().corner(8.0).padding_xy(12.0, 6.0).clickable()
+    if on [
+        m = m.background(t.primary_container)
+    ] else [
+        m = m.border(1.0, t.outline)
+    ]
+    let i = ui_open(ui, K_ROW, m)
+    ui.nodes[i].align = ALIGN_CENTER
+    ui.nodes[i].spacing = 6.0
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let changed = false
+    if it.clicked [
+        let nv = bool_toggle(ui, st.clone())
+        changed = true
+        on = nv
+    ]
+    if on [
+        TextStyled(ui, "✓", t.label, t.on_primary_container, true)
+        TextStyled(ui, label, t.label, t.on_primary_container, false)
+    ] else [
+        TextStyled(ui, label, t.label, t.on_surface_variant, false)
+    ]
+    ui_close(ui, K_ROW)
+    end changed
+]
+
+!! ================= Badge / Avatar =================
+!! Maly kolorowy znaczek z liczba/tekstem (np. liczba powiadomien).
+fun Badge(ui: Ui, label: Str) [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().min_size(18.0, 18.0).corner(9.0).padding_xy(5.0, 1.0).background(t.error))
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    TextStyled(ui, label, 11.0, t.on_primary, true)
+    ui_close(ui, K_BOX)
+]
+
+!! Okragly awatar z inicjalem (pierwsza litera `name`) na kolorze `primary_container`.
+fun Avatar(ui: Ui, name: Str, size: Float) [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_BOX, modifier().size(size, size).corner(size / 2.0).background(t.primary_container))
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let letter = "?"
+    if name.len() > 0 [
+        letter = name.slice(0, 1)
+    ]
+    TextStyled(ui, letter, size * 0.45, t.on_primary_container, true)
+    ui_close(ui, K_BOX)
+]
+
+!! ================= Tabs =================
+!! Pasek zakladek. Uzycie:
+!!   let tab = remember_int(ui, 0)
+!!   TabRow(ui)
+!!   Tab(ui, tab.clone(), 0, "Start")
+!!   Tab(ui, tab.clone(), 1, "Ustawienia")
+!!   EndTabRow(ui)
+!!   if int_get(ui, tab.clone()) == 0 [ ... ]
+fun TabRow(ui: Ui) [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_ROW, modifier().fill_max_width().background(t.surface))
+    ui.nodes[i].arr = ARR_START
+    ui.nodes[i].align = ALIGN_END
+]
+
+fun EndTabRow(ui: Ui) [
+    let t = ui.theme.clone()
+    Divider(ui)
+    ui_close(ui, K_ROW)
+]
+
+!! Pojedyncza zakladka o numerze `index`; zwraca true gdy uzytkownik ja wybral.
+fun Tab(ui: Ui, st: IntState, index: Int, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let sel = int_get(ui, st.clone()) == index
+    let i = ui_open(ui, K_COLUMN, modifier().padding_xy(16.0, 0.0).min_size(72.0, 48.0).clickable())
+    ui.nodes[i].align = ALIGN_CENTER
+    ui.nodes[i].arr = ARR_END
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let changed = false
+    if it.clicked and not sel [
+        int_set(ui, st.clone(), index)
+        changed = true
+        sel = true
+    ]
+    if it.hovered and not sel [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 14)
+    ]
+    let fg = t.on_surface_variant
+    if sel [
+        fg = t.primary
+    ]
+    Spacer(ui, modifier().height(14.0))
+    TextStyled(ui, label, t.body, fg, sel)
+    Spacer(ui, modifier().height(12.0))
+    let bar = t.primary
+    if not sel [
+        bar = color_with_alpha(t.primary, 0)
+    ]
+    Spacer(ui, modifier().fill_max_width().height(3.0).corner(2.0).background(bar))
+    ui_close(ui, K_COLUMN)
+    end changed
+]
+
+!! ================= SegmentedButton =================
+!! Grupa wzajemnie wykluczajacych sie opcji w jednym rzedzie:
+!!   SegmentedRow(ui)
+!!   Segment(ui, st.clone(), 0, "Dzien")
+!!   Segment(ui, st.clone(), 1, "Tydzien")
+!!   EndSegmentedRow(ui)
+fun SegmentedRow(ui: Ui) [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_ROW, modifier().corner(20.0).border(1.0, t.outline).clip())
+    ui.nodes[i].align = ALIGN_CENTER
+]
+
+fun EndSegmentedRow(ui: Ui) [
+    ui_close(ui, K_ROW)
+]
+
+fun Segment(ui: Ui, st: IntState, index: Int, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let sel = int_get(ui, st.clone()) == index
+    let m = modifier().padding_xy(16.0, 8.0).min_size(48.0, 40.0).clickable()
+    if sel [
+        m = m.background(t.primary_container)
+    ]
+    let i = ui_open(ui, K_BOX, m)
+    ui.nodes[i].align = ALIGN_BOX_CENTER
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    let changed = false
+    if it.clicked and not sel [
+        int_set(ui, st.clone(), index)
+        changed = true
+        sel = true
+    ]
+    if it.hovered and not sel [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 14)
+    ]
+    let fg = t.on_surface_variant
+    if sel [
+        fg = t.on_primary_container
+    ]
+    TextStyled(ui, label, t.label, fg, sel)
+    ui_close(ui, K_BOX)
+    end changed
+]
+
+!! ================= ListItem =================
+!! Wiersz listy: tytul + opcjonalny podtytul (pusty `Str` = brak). Klikalny.
+!!   if ListItem(ui, "Wifi", "Polaczono") [ ... ]
+fun ListItem(ui: Ui, title: Str, subtitle: Str) -> Bool [
+    let t = ui.theme.clone()
+    let i = ui_open(ui, K_COLUMN, modifier().fill_max_width().padding_xy(16.0, 10.0).clickable())
+    ui.nodes[i].spacing = 2.0
+    let id = ui.nodes[i].id
+    let it = ui_interact(ui, id)
+    if it.pressed [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 30)
+    ] elif it.hovered [
+        ui.nodes[i].m.bg = color_with_alpha(t.on_surface, 14)
+    ]
+    TextStyled(ui, title, t.body, t.on_surface, false)
+    if subtitle.len() > 0 [
+        TextStyled(ui, subtitle, t.label, t.on_surface_variant, false)
+    ]
+    ui_close(ui, K_COLUMN)
+    end it.clicked
+]
+
+!! ================= Banner (info / blad) =================
+!! kind: 0 = info, 1 = blad. Zwraca true gdy kliknieto "Zamknij".
+fun Banner(ui: Ui, message: Str, kind: Int) -> Bool [
+    let t = ui.theme.clone()
+    let bg = t.primary_container
+    let fg = t.on_primary_container
+    if kind == 1 [
+        bg = color_with_alpha(t.error, 40)
+        fg = t.error
+    ]
+    let r = ui_open(ui, K_ROW, modifier().fill_max_width().corner(t.radius).padding(12.0).background(bg))
+    ui.nodes[r].align = ALIGN_CENTER
+    ui.nodes[r].spacing = 12.0
+    let glyph = "i"
+    if kind == 1 [
+        glyph = "!"
+    ]
+    TextStyled(ui, glyph, t.title, fg, true)
+    let m = ui_open(ui, K_COLUMN, modifier().weight(1.0))
+    TextStyled(ui, message, t.body, fg, false)
+    ui_close(ui, K_COLUMN)
+    let closed = IconButton(ui, "x")
+    ui_close(ui, K_ROW)
+    end closed
+]
+
+!! ================= ProgressWithLabel / RatingBar =================
+!! Pasek postepu z procentem po prawej.
+fun ProgressWithLabel(ui: Ui, frac: Float) [
+    let t = ui.theme.clone()
+    let f = fclamp(frac, 0.0, 1.0)
+    let r = ui_open(ui, K_ROW, modifier().fill_max_width())
+    ui.nodes[r].align = ALIGN_CENTER
+    ui.nodes[r].spacing = 12.0
+    ui_open(ui, K_BOX, modifier().weight(1.0))
+    LinearProgress(ui, f)
+    ui_close(ui, K_BOX)
+    let pct = ((f * 100.0) as Int) as Str
+    TextStyled(ui, pct + "%", t.label, t.on_surface_variant, false)
+    ui_close(ui, K_ROW)
+]
+
+!! Ocena gwiazdkowa 1..max; `st` trzyma biezaca ocene (0 = brak). Zwraca true przy zmianie.
+fun RatingBar(ui: Ui, st: IntState, max: Int) -> Bool [
+    let t = ui.theme.clone()
+    let r = ui_open(ui, K_ROW, modifier())
+    ui.nodes[r].align = ALIGN_CENTER
+    let cur = int_get(ui, st.clone())
+    let changed = false
+    let k = 1
+    while k <= max [
+        let star = "☆"
+        let col = t.outline
+        if k <= cur [
+            star = "★"
+            col = t.primary
+        ]
+        let b = ui_open(ui, K_BOX, modifier().size(32.0, 32.0).clickable())
+        ui.nodes[b].align = ALIGN_BOX_CENTER
+        let bid = ui.nodes[b].id
+        let bit = ui_interact(ui, bid)
+        TextStyled(ui, star, 24.0, col, false)
+        ui_close(ui, K_BOX)
+        if bit.clicked [
+            int_set(ui, st.clone(), k)
+            changed = true
+        ]
+        k = k + 1
+    ]
+    ui_close(ui, K_ROW)
+    end changed
+]
+
+!! ================= LabeledSwitch / LabeledSlider =================
+!! Przelacznik z etykieta po lewej (etykieta rozpycha sie wagą, switch przy prawej krawedzi).
+fun LabeledSwitch(ui: Ui, st: BoolState, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let r = ui_open(ui, K_ROW, modifier().fill_max_width().padding_xy(4.0, 4.0))
+    ui.nodes[r].align = ALIGN_CENTER
+    ui.nodes[r].spacing = 12.0
+    ui_open(ui, K_BOX, modifier().weight(1.0))
+    TextStyled(ui, label, t.body, t.on_surface, false)
+    ui_close(ui, K_BOX)
+    let changed = Switch(ui, st.clone())
+    ui_close(ui, K_ROW)
+    end changed
+]
+
+!! Suwak z etykieta i aktualna wartoscia (zaokraglona do liczby calkowitej).
+fun LabeledSlider(ui: Ui, st: FloatState, lo: Float, hi: Float, label: Str) -> Bool [
+    let t = ui.theme.clone()
+    let c = ui_open(ui, K_COLUMN, modifier().fill_max_width())
+    let h = ui_open(ui, K_ROW, modifier().fill_max_width())
+    ui.nodes[h].arr = ARR_SPACE_BETWEEN
+    TextStyled(ui, label, t.label, t.on_surface_variant, false)
+    let v = float_get(ui, st.clone())
+    TextStyled(ui, ((v as Int) as Str), t.label, t.on_surface, true)
+    ui_close(ui, K_ROW)
+    let changed = Slider(ui, st.clone(), lo, hi)
+    ui_close(ui, K_COLUMN)
+    end changed
+]
