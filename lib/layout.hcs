@@ -1,3 +1,7 @@
+include <draw>
+include <native>
+include <theme>
+include <modifier>
 include <ui>
 
 const INF: Float = 1000000.0
