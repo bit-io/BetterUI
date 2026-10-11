@@ -1,0 +1,83 @@
+using <0.5>
+get <bit:BetterUI>
+
+!! Przeglad widgetow dodanych w BetterUI 0.1 (lib/extras.hcs).
+
+fun TabStart(ui: Ui) [
+    let chip_a = remember_bool(ui, true)
+    let chip_b = remember_bool(ui, false)
+    let seg = remember_int(ui, 0)
+    let rating = remember_int(ui, 3)
+    let notif = remember_bool(ui, true)
+    let vol = remember_float(ui, 40.0)
+
+    RowWith(ui, modifier(), ARR_START, ALIGN_CENTER, 8.0)
+    let ca = FilterChip(ui, chip_a.clone(), "Rust")
+    let cb = FilterChip(ui, chip_b.clone(), "Kotlin")
+    if Chip(ui, "Akcja") [
+        bool_set(ui, chip_b.clone(), false)
+    ]
+    Avatar(ui, "Mateusz", 32.0)
+    Badge(ui, "3")
+    EndRow(ui)
+    SpacerH(ui, 12.0)
+
+    SegmentedRow(ui)
+    let s0 = Segment(ui, seg.clone(), 0, "Dzien")
+    let s1 = Segment(ui, seg.clone(), 1, "Tydzien")
+    let s2 = Segment(ui, seg.clone(), 2, "Miesiac")
+    EndSegmentedRow(ui)
+    SpacerH(ui, 12.0)
+
+    let rc = RatingBar(ui, rating.clone(), 5)
+    SpacerH(ui, 12.0)
+    let ls = LabeledSwitch(ui, notif.clone(), "Powiadomienia")
+    let lv = LabeledSlider(ui, vol.clone(), 0.0, 100.0, "Glosnosc")
+    SpacerH(ui, 8.0)
+    let vv = float_get(ui, vol.clone())
+    ProgressWithLabel(ui, vv / 100.0)
+]
+
+fun TabList(ui: Ui) [
+    if ListItem(ui, "Wifi", "Polaczono z domem") [
+        elog("wifi")
+    ]
+    Divider(ui)
+    if ListItem(ui, "Bluetooth", "") [
+        elog("bt")
+    ]
+]
+
+fun App(ui: Ui) [
+    let tab = remember_int(ui, 0)
+    let banner_open = remember_bool(ui, true)
+    Column(ui, modifier().fill_max_size())
+    TopAppBar(ui, "BetterUI 0.1")
+    TabRow(ui)
+    let t0 = Tab(ui, tab.clone(), 0, "Widgety")
+    let t1 = Tab(ui, tab.clone(), 1, "Lista")
+    EndTabRow(ui)
+    ScrollColumn(ui, modifier().fill_max_width().weight(1.0).padding(16.0))
+    if bool_get(ui, banner_open.clone()) [
+        if Banner(ui, "To jest baner informacyjny.", 0) [
+            bool_set(ui, banner_open.clone(), false)
+        ]
+        SpacerH(ui, 12.0)
+    ]
+    if int_get(ui, tab.clone()) == 0 [
+        TabStart(ui)
+    ] else [
+        TabList(ui)
+    ]
+    EndColumn(ui)
+    EndColumn(ui)
+]
+
+fun main() [
+    let gfx = window_open("BetterUI widgets", 480, 560)
+    let ui = ui_new(480.0, 560.0)
+    while frame_begin(ui, gfx) [
+        App(ui)
+        frame_end(ui, gfx)
+    ]
+]
