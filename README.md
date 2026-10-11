@@ -73,6 +73,18 @@ Arrangement: `ARR_START|CENTER|END|SPACE_BETWEEN|SPACE_AROUND|SPACE_EVENLY`; ali
 
 **Widgety:** `Button`, `OutlinedButton`, `TextButton`, `TonalButton` (zwracaja `true` przy kliknieciu), `Checkbox(st, label)`, `RadioButton(st, index, label)`, `Switch(st)`, `Slider(st, lo, hi)` (przeciaganie), `LinearProgress(frac)`, `TextField(st, hint)` (kursor, Backspace/Delete/strzalki/Home/End), `TopAppBar(title)`.
 
+**Widgety dodatkowe (`lib/extras.hcs`):** `IconButton(glyph)`, `FloatingActionButton(glyph)`, `Chip(label)`, `FilterChip(st, label)`, `Badge(label)`, `Avatar(name, size)`,
+`TabRow`/`Tab(st, index, label)`/`EndTabRow`, `SegmentedRow`/`Segment(st, index, label)`/`EndSegmentedRow`, `ListItem(title, subtitle) -> Bool`, `Banner(msg, kind) -> Bool` (zamkniecie),
+`ProgressWithLabel(frac)`, `RatingBar(st, max)`, `LabeledSwitch(st, label)`, `LabeledSlider(st, lo, hi, label)`. Przyklad: `examples/widgets`.
+
+**Motywy (`lib/themes.hcs`):** `theme_accent(kolor, dark)` buduje caly motyw z jednego akcentu; presety `theme_ocean/forest/rose/amber/graphite(dark)`;
+`ui_set_accent(ui, kolor, dark)` ustawia go w biegu (`theme_light()`/`theme_dark()` i `ui_set_dark` bez zmian). `Card` ma miekki cien i delikatna ramke.
+
+**Testy (`tests/`):** `bash tests/run.sh [hackerc]` - 99 asercji headless (layout, hover/klik/przeciaganie, TextField, scroll, widgety, motywy) na pustym backendzie,
+bez okna i Skii. Wymaga hackerc >= 0.5 z poprawkami generatora (propagacja `&mut` po grafie wywolan, przypisania/metody mutujace przez `xs[i].pole`),
+bez nich biblioteka sie nie kompiluje. Wydajnosc: `ui_compute_hot` nie kopiuje juz wezlow, a hackerc nie klonuje calego elementu przy odczycie `xs[i].pole`
+(klatka z ~750 wezlami: ok. 1.7 ms -> ok. 0.8 ms w tescie z pustym backendem).
+
 **Modifier** (lancuch, kazda metoda zwraca nowy): `width height size min_size fill_max_width fill_max_height fill_max_size fill_width fill_height padding padding_xy padding_each weight background corner border shadow alpha offset clip clickable vertical_scroll key align`.
 
 **Kolory:** `rgb(r,g,b)`, `argb(a,r,g,b)`, `color_lerp`, `color_with_alpha`, `color_scale_alpha` (Int `0xAARRGGBB`).
@@ -102,5 +114,5 @@ Zobacz `tests/headless` (klikniecia, checkbox, pisanie w TextField).
 * Okno ma stala wielkosc (brak reakcji na resize); brak IME - klawiatura US (litery, cyfry, podstawowa interpunkcja).
 * Stan z `remember_*` nie jest sprzatany po zniknieciu wezlow (HackerScript nie iteruje po `Dict`).
 * Klucze `Dict` musza byc `Str` (blad hackerc z `Dict<Int,..>`); wywolania `f(ui, g(ui))` rozbijaj na `let`.
-* Brak: obrazow, ikon wektorowych, dialogow/popupow, listy z wirtualizacja (jest `ScrollColumn`), animacji sprezynowych.
+* Brak: obrazow, ikon wektorowych, dialogow/popupow (overlay), listy z wirtualizacja (jest `ScrollColumn`), animacji sprezynowych.
 * Backend Skia to rasteryzacja CPU (bez OpenGL/Vulkan).
