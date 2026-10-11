@@ -1,0 +1,51 @@
+include <draw>
+include <native>
+include <theme>
+
+!! ===========================================================================
+!! BetterUI - motywy (dodatek, API `theme_light()`/`theme_dark()` bez zmian).
+!!
+!! `theme_accent(accent, dark)` buduje spojny motyw Material-3-podobny z JEDNEGO
+!! koloru akcentu: tlo/powierzchnie sa lekko podbarwione akcentem (ladniej niz
+!! czysta szarosc), kontenery to rozjasnione/przyciemnione mieszanki akcentu.
+!! Presety: theme_ocean, theme_forest, theme_rose, theme_amber, theme_graphite.
+!! ===========================================================================
+
+fun theme_accent(accent: Int, dark: Bool) -> Theme [
+    let white = rgb(255, 255, 255)
+    let black = rgb(0, 0, 0)
+    if dark [
+        let bg = color_lerp(rgb(18, 18, 20), accent, 0.06)
+        let surf = color_lerp(rgb(28, 27, 31), accent, 0.08)
+        let prim = color_lerp(accent, white, 0.45)
+        let pc = color_lerp(bg, accent, 0.42)
+        let onp = color_lerp(accent, black, 0.75)
+        let onpc = color_lerp(accent, white, 0.85)
+        end Theme(prim, onp, pc, onpc, color_lerp(prim, rgb(160, 160, 170), 0.55), bg, rgb(230, 225, 230), surf, rgb(200, 195, 205), bg, rgb(147, 143, 153), rgb(242, 184, 181), 1, 16.0, 22.0, 32.0, 14.0, 12.0)
+    ]
+    let bg = color_lerp(rgb(255, 252, 255), accent, 0.04)
+    let surf = color_lerp(rgb(238, 234, 240), accent, 0.12)
+    let pc = color_lerp(white, accent, 0.22)
+    let onpc = color_lerp(accent, black, 0.7)
+    end Theme(accent, white, pc, onpc, color_lerp(accent, rgb(120, 120, 130), 0.5), bg, rgb(28, 27, 31), surf, rgb(73, 69, 79), bg, rgb(121, 116, 126), rgb(179, 38, 30), 0, 16.0, 22.0, 32.0, 14.0, 12.0)
+]
+
+fun theme_ocean(dark: Bool) -> Theme [
+    end theme_accent(rgb(0, 103, 156), dark)
+]
+
+fun theme_forest(dark: Bool) -> Theme [
+    end theme_accent(rgb(46, 125, 50), dark)
+]
+
+fun theme_rose(dark: Bool) -> Theme [
+    end theme_accent(rgb(194, 24, 91), dark)
+]
+
+fun theme_amber(dark: Bool) -> Theme [
+    end theme_accent(rgb(191, 111, 0), dark)
+]
+
+fun theme_graphite(dark: Bool) -> Theme [
+    end theme_accent(rgb(84, 94, 106), dark)
+]
