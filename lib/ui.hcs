@@ -390,7 +390,26 @@ fun ui_visible_at(nodes: List<Node>, i: Int, mx: Float, my: Float) -> Bool [
     end true
 ]
 
+!! Czy punkt jest widoczny dla wezla `i` poprzedniej klatki (nie ucieto go przez clip/scroll przodka)?
+!! Wersja bez kopiowania listy wezlow (lekka): czyta tylko potrzebne pola.
+fun ui_prev_visible_at(ui: Ui, i: Int, mx: Float, my: Float) -> Bool [
+    let p = ui.prev_nodes[i].parent
+    while p >= 0 [
+        if ui.prev_nodes[p].m.do_clip == 1 or ui.prev_nodes[p].m.do_scroll == 1 [
+            let px = ui.prev_nodes[p].x
+            let py = ui.prev_nodes[p].y
+            if not (mx >= px and mx < px + ui.prev_nodes[p].w and my >= py and my < py + ui.prev_nodes[p].h) [
+                end false
+            ]
+        ]
+        p = ui.prev_nodes[p].parent
+    ]
+    end true
+]
+
 !! Wylicza hot_id (najwyzszy klikalny wezel pod kursorem) i scroll_id z poprzedniej klatki.
+!! Lekka wersja: zadnych kopii calych wezlow/listy (wczesniej `prev_nodes[i].clone()` +
+!! `prev_nodes.clone()` na KAZDY wezel w kazdej klatce).
 fun ui_compute_hot(ui: Ui) [
     ui.hot_id = 0
     ui.scroll_id = 0
@@ -398,15 +417,16 @@ fun ui_compute_hot(ui: Ui) [
     let my = ui.input.my
     let i = ui.prev_nodes.len() - 1
     while i >= 0 [
-        let n = ui.prev_nodes[i].clone()
-        if node_contains(n.clone(), mx, my) [
-            if n.m.is_click == 1 and ui.hot_id == 0 [
-                if ui_visible_at(ui.prev_nodes.clone(), i, mx, my) [
-                    ui.hot_id = n.id
+        let nx = ui.prev_nodes[i].x
+        let ny = ui.prev_nodes[i].y
+        if mx >= nx and mx < nx + ui.prev_nodes[i].w and my >= ny and my < ny + ui.prev_nodes[i].h [
+            if ui.prev_nodes[i].m.is_click == 1 and ui.hot_id == 0 [
+                if ui_prev_visible_at(ui, i, mx, my) [
+                    ui.hot_id = ui.prev_nodes[i].id
                 ]
             ]
-            if n.m.do_scroll == 1 and ui.scroll_id == 0 [
-                ui.scroll_id = n.id
+            if ui.prev_nodes[i].m.do_scroll == 1 and ui.scroll_id == 0 [
+                ui.scroll_id = ui.prev_nodes[i].id
             ]
         ]
         i = i - 1
